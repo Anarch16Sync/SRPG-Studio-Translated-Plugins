@@ -8,3 +8,4 @@ Main should remain empty with only this read me to contain a general list of wha
 Current Branches:
 
 - O-to Plugins
+- Namaemitei Plugins
