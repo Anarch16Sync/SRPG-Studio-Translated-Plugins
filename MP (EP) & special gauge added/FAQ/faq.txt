@@ -1,0 +1,20 @@
+//--------------------------------------------------------------------------------------
+//Questions that are particularly likely to come up due to inquiries received via email etc.
+//I will add to this QA table any parts that I thought were difficult to understand in the specifications.
+//--------------------------------------------------------------------------------------
+
+Q1.
+I want to display the unit event command display condition if the EP or FP value is above a certain level.
+
+A1.
+By setting the event execution conditions as shown below, you can achieve "the command will be displayed if EP and FP are above a certain value".
+
+1.Open the event execution condition dialog and select the "Script" tab.
+2. Check "Make script a condition" and enter the code below in the text field below.
+//------
+OT_GetNowEP(root.getCurrentSession().getActiveEventUnit()) >= (required number)
+
+//------
+*If you want to use FP as a condition, change OT_GetNowEP to OT_GetNowFP.
+
+
