@@ -1,284 +1,335 @@
 -----------------------------------------------------------------------------------------
-【Change log】
-  2015/06/6: α version released
+[Change log]
+  2015/06/6: Alpha version released
   2015/06/17: Beta version released
-  2015/06/20: Added assault-like skills,
-              Skill activation conditions Separate scripts for additional skills and scripts for additional skills
-  2015/09/06: Assault skill correction due to deletion of official function
-  2015/09/13: "Ranbu" corresponds to 1-239's integrated CalA nore attack
-  2015/10/31: Corrected due to the name change of the official function in "Ranbu" and "Assault"
-  2016/06/13: Recreate the cancellation posted on a certain thread
-  2017/04/23: Fixed because the defense ignore of the option of the essential skill did not work when using skill-BreakAttack.js
+  2015/06/20: Added attack-like skills,
+              Separate the scripts for adding skill activation conditions and the scripts for additional skills.
+  2015/09/06: Charge skill modified due to deletion of official function
+  2015/09/13: "Ranbu" corresponds to 1-239's integrated CalA noreattack
+  2015/10/31: Corrected due to official function name change in “Ranbu” and “Assault”
+  2016/06/13: Remade the cancellation posted in a certain thread
+  2017/04/23: Fixed the issue where the option to ignore defense for hit skills was not working when skill-BreakAttack.js was used.
   2019/05/25:
-  ・ Skill-Assault.js (continue battle)
-  When the opponent is invincible, the attack does not hit, HP absorbs each other and fights endlessly
-  Unless you set the skill count limit together with the skill activation condition addition script
-  Fixed a freeze issue, so the standard script for this skill now limits the number of activations.
+  -skill-Assault.js (continue battle)
+  If you find yourself in a situation where you have to fight endlessly because your opponent is invincible, your attacks don't hit, you absorb each other's HP, etc.
+  Unless you set a limit on the number of times a skill can be used in conjunction with a skill activation condition addition script,
+Since there was a freeze issue, the standard script for this skill has been modified to limit the number of times it can be activated.
   
-  Fixed so that it can be set in Custom Parameter so that it can not be activated in situations where it can attack unilaterally.
+  Modified so that it can be set in Custom Parameter so that it does not activate in situations where it can be attacked unilaterally.
   
-  If the character is immortal in the event settings, the invoker will be at a disadvantage.
-  Added Custom Parameter to alleviate it.
+  If the event is set against a character who has become immortal, the user will be at a disadvantage.
+  Add Custom parameter to alleviate it.
   
-  When the skill activation display is re-combated by the skill after both battles are over
-  Fixed to be displayed in the first offense and defense.
+  The activation display of the skill will be the same as when re-battling with the skill after both battles have ended.
+  Corrected so that it is displayed during the first attack and defense.
   
-  2020/01/01:
-  ・ Skill-StatusAttack.js (status-dependent attack)
+  2020/01/01：
+  -skill-StatusAttack.js (Status-dependent attack)
   Create New.
-  The attack power of the skill owner and the defense power of the attack target are specified by custom parameters.
-  It depends on the status.
+  The skill owner's attack power and attack target's defense power were specified with custom parameters.
+  It will be status dependent.
 
   2020/01/07:
-  Corrected because some skills did not describe what is specified as a keyword for custom skills.
-  Corrected the skill name of "Damage Absorption" to "Damage Absorption" (because it suffers from the official name) 
-  
+  Fixed an issue where the keywords for custom skills were not specified for some skills.
+  Corrected the skill name of "Damage Absorption" to "Damage Absorption" (because it overlaps with the official name)
+
+  2023/07/17:
+  Added damage multiplier adjustment function to the skill "Critical Attack" when activated.
+  Also, it used to ignore critical invalidity when activated, but it can now be set so that it does not ignore it with Custom Parameter.
+  Created a new skill "Critical multiplier change".
+  Activation is determined when a critical occurs, and when activated
+  The critical multiplier of the critical hit at that time will be changed to the value specified by Custom Parameter.
   
 -----------------------------------------------------------------------------------------
-[Installation method]
-* If you installed this script before June 20, 2015, please delete the "OT_skill" folder once.
-Put "OT_skill" in the Plugin folder.
+[Introduction method]
+*If you installed this script before June 20, 2015, please delete the "ot skill" folder.
+Please put "ot_skill" in the plugin folder.
 
 Recommended for use with additional skill activation conditions.
-(Especially for status-dependent attacks, it is assumed that the same type of skill activation order check (Duplicate Skill.js) is included)
+(Especially for status-dependent attacks, it is assumed that the order of activation of similar skills is checked (duplicate skill.js))
 
-Armor break (skill-BreakAttack.js) and status-dependent attack (skill-StatusAttack.js) are by design.
-Since it is easy to conflict with another custom script (general Cal etc.), when using another custom script together
-Whether to change the folder name of "OT_skill" to "0OT_skill" and read it first
-Merge the description into another script,
-Or if you do not use it, remove the corresponding script. 
+Because armor break (skill break attack.js) and status-dependent attack (skill status attack.js) tend to conflict with other custom scripts (such as general cal),
+when using them together with other custom scripts, Either change the folder name of "skill" to "0_ot_skill" and load it first, or merge the description into another script,
+or remove the script if it is not used.
 
 -----------------------------------------------------------------------------------------
-【Overview】
-By introducing it, you will be able to use the following skills.
+[Overview] 
+By installing it, you will be able to use the following skills.
 
-・ Always make a critical attack when activated
-・ Defense-ignoring attack
-・ Random multiple attacks
-・ Damage absorption
-・ Continue the battle
-・ Reduce the number of rounds of the opponent when hitting an attack
--Depends the attack power of the skill owner and the defense power of the attack target on a specific status. 
+-When activated, always performs a critical attack 
+-Attack that ignores defense power 
+-Randomly attacks multiple times 
+-Absorbs damage taken 
+-Continues the battle 
+-Reduces the number of rounds for the opponent when the attack hits 
+-Changes the attack power of the skill owner and the defense power of the attack target to a specific status make dependent
+
 -----------------------------------------------------------------------------------------
-【how to use】
-■ File name: skill-BreakAttack.js
-・ Skill [Armor Break] (Luna-like)
-Usage: Enter [OT_Break Attack] as the keyword for the custom skill.
+[Instructions]
+-File name: skill critical magnification change.js
+-Skill [Critical multiplier change]
+How to use: Custom skill keyword [OT_CriticalMagnificationChange].
+When activated, the critical multiplier at that time will be changed to the value specified by Custom Parameter.
 
-When this skill is activated, it will be an attack that ignores the defense power of the enemy.
-If you want to set what percentage of defense is ignored, set custom parameters
-if you do not set the parameter, the defense power of the opponent will be completely ignored.
+Normally, when a critical hit occurs, the damage compensation value will be the value
+set in "Critical Coefficient" in "Data Settings" → "Config 2", but when a skill is activated,
+the critical compensation value will be the value specified in the skill's Custom parameter. It becomes.
 
 -Custom parameters that can be passed
 {
- BreakPercent: (numerical value) // Set what percentage of the opponent's defense power is ignored
+  CRMC_DamageRate:(Number) //Critical multiplier, default is 3.0 if not specified
 }
 
+*The following example assumes that the critical coefficient is 300 (default value).
+
 example:
-If you set BreakPercent: 60, 60% of the opponent's defense will be ignored. 
+CRMC_DamageRate:5.0
+If set, the critical damage will be 3x when the skill is not activated, but the critical damage will be 5x when the skill is activated.
+
+For example, if normal damage is 5, normal critical damage is 15. When the skill is activated, critical damage will be 25.
+
+ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
+-file name：skill-BreakAttack.js
+-Skill [Armor Break] (Luna-like)
+Instructions: Custom skill keyword [OT_BreakAttack]
+
+When this skill is activated, the attack ignores the enemy's defense power.
+If you want to set the percentage of defense power to ignore, set a custom parameter.
+If you do not set a parameter, the opponent's defense power will be completely ignored.
+
+-Custom parameters that can be passed
+{
+  BreakPercent:(Numeric value) //Set what percentage of the opponent's defense power to ignore
+}
+
+example：
+BreakPercent:60
+If set, 60% of the opponent's defense power will be ignored.。
 
 
 ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
-■ File name: skill-Critical.js
-・ Skill [Critical Attack]
-Usage: Enter [OT_Critical] as the keyword for the custom skill.
-
+-file name：skill-Critical.js
+-Skill [Critical Attack]
+How to use: Custom skill keyword [OT_Critical]
 When this skill is activated, the attack becomes critical.
 
-Put it with the "OT_ExtraConfigSkill" folder
-100% activation rate, with custom parameters
-{
-   EC_NowHP: '0-50%'
-}
-If you specify, you can reproduce the FE skill "Wrath" (critical attack with HP 50% or less). 
+「OT_ExtraConfigSkill」
+Put it together with the folder and set the activation rate to 100% with custom parameters.
 
+{
+  EC_NowHP:'0-50%'
+}
+If you specify , you can reproduce fe's skill "Rage" (critical attack when h p50% or less).
+
+-Custom parameters that can be passed
+{
+    CRTA_DamageRate  : (Numeric value) //Adjustment of damage multiplier when skill is activated, default is 1.0 when not specified (note that it is not critical multiplier)
+  , CRTA_IgnoreCriticalGuard  :(Boolean value) //Ignore the opponent's critical invalidation skill, or default to true if not specified
+}
+
+If CRTA_DamageRate is set, the final damage from "Critical Attack" is
+corrected by (Critical Damage)*CRTA_DamageRate.
+
+*The following example assumes that the critical coefficient is 300 (default value).
+
+example：
+CRTA_DamageRate:2.0
+If normal damage is 6, normal critical damage is 18. When the "Critical Attack" skill is activated, the critical damage will be 36.
+
+*
+When Custom parameter CRTA_DamageRate of "Critical Attack" is set
+If both "Critical Attack" and "Critical Multiplier Change" skills are activated,
+Damage value *CRMC_DamageRate (Custom parameter of critical multiplier change) *CRTA_DamageRate is the final damage.
+
+for example
+If you set the Custom parameter CRMC_DamageRate of "Critical multiplier change" to 5.0,
+If you set the Custom parameter CRTA_DamageRate of "Critical Attack" to 3.0,
+If normal damage is 4, critical damage when both skills are not activated is 12.
+The critical damage when only the "Critical Attack" skill is activated is 36.
+When only the "Critical Multiplier Change" skill is activated, the damage caused by a critical hit is 20.
+
+If both skills are activated
+4 * 5.0(CRMC_DamageRate) * 3.0(CRTA_DamageRate) = This will cause 60 damage.
 
 ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
-■ File name: skill-BoisterousDance.js
-・Skill [Dance]
-How to use: Enter [OT_BoisterousDance] in the custom skill keyword.
+-file name：skill-BoisterousDance.js
+-Skill [Ranbu]
+How to use: Custom skill keyword [OT_BoisterousDance]
 
-When the skill is activated, it will be a random attack multiple times.
-Damage dealt while possessing this skill is reduced.
-(It is also possible to reduce damage only when activated with custom parameters)
+When the skill is activated, it will cause multiple random attacks.
+When possessing this skill, damage inflicted will be reduced.
+(It is also possible to reduce the damage only when activated with a custom parameter)
 
-・Custom parameters that can be passed
+-Custom parameters that can be passed
 {
-    DamageRate : (number) //Set how much damage will be done
-  , MaxAttackCount : (number) //You can set the maximum number of attacks
-  , MinAttackCount : (number) //At least this set value will be attacked when the skill is activated
-  , isRateChange : (number) // 0 changes the damage rate just by having the skill, and 1 changes the damage rate only when the skill is activated.
-  , isNoReattack : (numerical value) //Set whether to be affected by Mr. 1-239's integrated CalA noreattack, 1 to receive, 0 to not
+    DamageRate     :(Numeric value) //Set what percentage of damage
+  , MaxAttackCount :(number) //You can set the maximum number of attacks
+  , MinAttackCount :(Numeric value) //When the skill is activated, at least this set value will be used as an attack.
+  , isRateChange   :(Numeric value) //With 0, the damage rate will change just by possessing the skill, and with 1, the damage rate will change only when the skill is activated.
+  , isNoReattack   :(Numeric value) //1 Set whether to be affected by Mr. 239's integrated cal a's noreattack, 1 to be affected, 0 to not be affected.
 }
 
 example:
-DamageRate: 30
-MinAttackCount : 3
-MinAttackCount : 6
-isRateChange : 1
+{
+DamageRate       : 30
+,MinAttackCount   : 3
+,MinAttackCount   : 6
+,isRateChange     : 1
+}
 
-After activating the skill, attack at least 3 times and attack at maximum 6 times.
-Also, the damage dealt is reduced to 30% only when the skill is activated.
+After activating the skill, it will attack at least 3 times and up to 6 times.
+Also, the damage dealt will be reduced to 30% only when the skill is activated.
 
-*
 If DamageRate is not set, it will be 50.
 If MaxAttackCount is not set, it will be 5.
 If MinAttackCount is not set, it will be 2.
-Will be 0 if isRateChange is not set.
-isNoReattack will be 1 if unset.
+If isRateChange is not set, it will be 0.
+If isNoReattack is not set, it will be 1.
 
 
 ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
-■ File name: skill-AbsorptionDamage.js
-・Skill "damage absorption"
-Usage: Enter [OT_AbsorptionDamage] as the keyword for your custom skill.
+-file name：skill-AbsorptionDamage.js
+-Skill “Damage Absorption”
+How to use: Custom skill keyword [OT_AbsorptionDamage]
 
-Recovers HP by absorbing the damage received from the opponent when the skill is activated.
+HP is recovered by absorbing damage received from the opponent when the skill is activated.
 
-・Custom parameters that can be passed
+-Custom parameters that can be passed
 {
-   AbsorptionPercent: (number) //Set what percentage of damage to absorb
+  AbsorptionPercent:(numeric value) //Set what percentage of damage is absorbed
 }
 
-If AbsorptionPercent is not set, it will be 100.
+If Absorption percent is not set, it will be 100.
 
 
 ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
-■ File name: skill-Assault.js
-・Skill "Battle Continuation"
-How to use: Enter [OT_Assault] in the custom skill keyword.
+-file name：skill-Assault.js
+-Skill “Continue Battle”
+How to use: Custom skill keyword [OT_Assault] 
 
-When the skill activates, the battle will continue.
-However, it will not activate in situations where the skill owner is attacked unilaterally.
-(It can be activated if the skill owner can attack unilaterally, but can be set to not be activated with Custom Parameter)
+Once the skill is activated, the battle will continue.
+However, it will not be activated in situations where the skill owner is attacked one-sidedly.
+(Can be activated in a situation where the skill owner can attack unilaterally, but can be set to not be activated with Custom Parameter)
 
-・Custom parameters that can be passed
+-Custom parameters that can be passed
 {
-    AS_Max: (number) //Maximum number of activations (50 if not specified)
-  , AS_OneSide: (Boolean value) // Will it be triggered in situations where it is possible to attack unilaterally (true if not specified)
-  , AS_AbortCheck: (logical value) //If the opponent is an immortal unit, suppress the activation when the immortal unit is dying (false if not specified)
+    AS_Max: (Number) //Maximum number of activations (50 if not specified)
+  , AS_OneSide: (Boolean value) //Is it activated in a situation where a unilateral attack is possible (true if not specified)
+  , AS_AbortCheck: (Logical value) //If the opponent is an immortal unit, suppress activation when the immortal unit is on the verge of death (false if not specified)
 }
 
-The default value when AS_Max is not specified is defined in AS_MaxActivate of skill-Assault.js.
+AS_Max The default value when not specified is defined by as max activate in skill assault.js.
 
-If AS_AbortCheck is set to true, for characters who have become immortal in the event settings
-When executing a forced evasion that occurs when you attack with a skill or critical hit that reduces HP to 0,
-It will no longer activate when the amount of normal attack damage exceeds HP.
-Alleviates the situation where the caster is attacked unilaterally and is at a disadvantage.
+AS_AbortCheck If you set this to true, when performing a forced evasion that occurs when a skill
+or critical hit attacks a character who has become invulnerable due to the event settings 
+and its HP becomes 0, the damage amount of the normal attack will exceed the HP.
+It will no longer be activated when Alleviates situations where the user is at a disadvantage due to being attacked one-sidedly.
 
 ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
-■ File name: skill-Cancel.js
-・Skill "Cancel+"
-How to use: Enter [OT_Cancel] in the custom skill keyword.
-
+-file name：skill-Cancel.js
+-Skill “Cancel+”
+How to use: Custom skill keyword [OT_Cancel]
 Reduces the opponent's number of rounds when the skill is activated.
 
-custom parameter
+custom parameters
 {
-   CancelCount: (number) //Set how many rounds to reduce
+  CancelCount:(number) //Set how many rounds to reduce
 }
 
-If CancelCount is unset, decrements all rounds.
+CancelCount If is not set, all rounds will be reduced.
 
 
 ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
-■ File name: skill-StatusAttack.js
-・Skill "Status Dependent Attack"
-How to use: Enter [OT_StatusAttack] in the custom skill keyword.
+-file name：skill-StatusAttack.js
+-skill"Status dependent attack"
+How to use: Custom skill keyword [OT_StatusAttack]
 
-The attack power of the skill owner and the defense power of the attack target were specified with custom parameters.
-It will be status dependent.
+The attack power of the skill owner and the defense power of the attack target will depend on the status specified by the custom parameter.
 
-Basically set the skill to the weapon,
-If you want to give it to a unit, it is recommended to make it a command skill.
-You can also use (strength/2 + technique/2) as attack power like the bow of Disgaea.
+Basically, it is recommended to set skills on weapons, and if you want to give them to a unit, it is recommended to make them command skills.
+You can also use (strength/2 + skill/2) as attack power like Disgaea's bow.
 
 It is also possible to turn it into a command skill when adding skill activation conditions.
-If you have both a non-command skill and a command skill
-Normally, non-command skills are activated, and command skills are activated when command skills are activated.
+If you have both a non-command skill and a command skill, the non-command skill will normally be activated, and when a command skill is activated, the command skill will be activated.
 
-Custom parameter (each value can be omitted)
+Custom parameters (each value can be omitted)
 {
-    SA_AttackValue:
-    {
-        LV: (Numeric value, decimal point/negative can be specified)
-      , HP: (Numeric value, decimal point/negative can be specified) // Current value x Custom Parameter value
-      , EP: (Numeric value, decimal point/negative can be specified) // Current value x Custom Parameter value, only when MP (EP) & special gauge (FP) additional plug-ins are installed
-      , FP: (Numeric value, decimal point/negative can be specified) // Current value x Custom Parameter value, only when MP (EP) & special gauge (FP) additional plug-ins are installed
-      , POW: (Numeric value, decimal point/negative can be specified)
-      , MAG: (Numeric value, decimal point/negative can be specified)
-      , SKI: (Numeric value, decimal point/negative can be specified)
-      , SPD: (Numeric value, decimal point/negative can be specified)
-      , LUK: (Numeric value, decimal point/negative can be specified)
-      , DEF: (Numeric value, decimal point/negative can be specified)
-      , MDF: (Numeric value, decimal point/negative can be specified)
-      , MOV: (Numeric value, decimal point/negative can be specified)
-      , WLV: (Numeric value, decimal point/negative can be specified)
-      , BLD: (Numeric value, decimal point/negative can be specified)
-      , WPN: (Numeric value, decimal point/negative can be specified) //Correct weapon attack power, default 1.0 when not specified
+    SA_AttackValue :
+    {   
+        LV:(Numeric value, decimal point/minus can be specified)
+      , HP:(Numeric value, decimal point/minus can be specified) // Current value x Custom parameter value
+      , EP:(Numeric value, decimal point/minus can be specified) // Current value x Custom parameter value, only when installing MP (EP) & Special Gauge (FP) additional plugins
+      , FP:(Numeric value, decimal point/minus can be specified) // Current value x Custom parameter value, only when installing MP (EP) & Special Gauge (FP) additional plugins
+      , POW:(Numeric value, decimal point/minus can be specified)
+      , MAG:(Numeric value, decimal point/minus can be specified)
+      , SKI:(Numeric value, decimal point/minus can be specified)
+      , SPD:(Numeric value, decimal point/minus can be specified)
+      , LUK:(Numeric value, decimal point/minus can be specified)
+      , DEF:(Numeric value, decimal point/minus can be specified)
+      , MDF:(Numeric value, decimal point/minus can be specified)
+      , MOV:(Numeric value, decimal point/minus can be specified)
+      , WLV:(Numeric value, decimal point/minus can be specified)
+      , BLD:(Numeric value, decimal point/minus can be specified)
+      , WPN:(Numeric value, decimal point/minus can be specified) //Corrects weapon attack power, defaults to 1.0 when not specified.
     }
     ,
-    SA_DefenceValue:
-    {
-        LV: (Numeric value, decimal point/negative can be specified)
-      , HP: (Numeric value, decimal point/negative can be specified) // Current value x Custom Parameter value
-      , EP: (Numeric value, decimal point/negative can be specified) // Current value x Custom Parameter value, only when MP (EP) & special gauge (FP) additional plug-ins are installed
-      , FP: (Numeric value, decimal point/negative can be specified) // Current value x Custom Parameter value, only when MP (EP) & special gauge (FP) additional plug-ins are installed
-      , POW: (Numeric value, decimal point/negative can be specified)
-      , MAG: (Numeric value, decimal point/negative can be specified)
-      , SKI: (Numeric value, decimal point/negative can be specified)
-      , SPD: (Numeric value, decimal point/negative can be specified)
-      , LUK: (Numeric value, decimal point/negative can be specified)
-      , DEF: (Numeric value, decimal point/negative can be specified)
-      , MDF: (Numeric value, decimal point/negative can be specified)
-      , MOV: (Numeric value, decimal point/negative can be specified)
-      , WLV: (Numeric value, decimal point/negative can be specified)
-      , BLD: (Numeric value, decimal point/negative can be specified)
+    SA_DefenceValue :
+    {   
+        LV:(Numeric value, decimal point/minus can be specified)
+      , HP:(Numeric value, decimal point/minus can be specified) // Current value x Custom parameter value
+      , EP:(Numeric value, decimal point/minus can be specified) // Current value x Custom parameter value, only when installing MP (EP) & Special Gauge (FP) additional plugins
+      , FP:(Numeric value, decimal point/minus can be specified) // Current value x Custom parameter value, only when installing MP (EP) & Special Gauge (FP) additional plugins
+      , POW:(Numeric value, decimal point/minus can be specified)
+      , MAG:(Numeric value, decimal point/minus can be specified)
+      , SKI:(Numeric value, decimal point/minus can be specified)
+      , SPD:(Numeric value, decimal point/minus can be specified)
+      , LUK:(Numeric value, decimal point/minus can be specified)
+      , DEF:(Numeric value, decimal point/minus can be specified)
+      , MDF:(Numeric value, decimal point/minus can be specified)
+      , MOV:(Numeric value, decimal point/minus can be specified)
+      , WLV:(Numeric value, decimal point/minus can be specified)
+      , BLD:(Numeric value, decimal point/minus can be specified)
     }
 }
 
-If SA_AttackValue is omitted, the attacker's attack power is normal,
-Weapon + (strength if the weapon is physical, magic if the weapon is magic)
-If SA_DefenceValue is omitted, the attack target's defense power is normal,
-If the attacking side's weapon is physical, it will be the defense power, and if the weapon is magic, it will be the magic defense power.
+SA_AttackValue If omitted, the attacker's attack power is as usual, weapon + (power if the weapon is physical, magic power if the weapon is magic).
+SA_DefenceValue If omitted, the attack target's defense power will be the same as usual;
+if the attacker's weapon is physical, it will be the defense power, and if the weapon is magic, it will be the magic defense power.
 
-Example 1:
+Example 1：
 {
     SA_AttackValue :{ POW:0.5, SKI:0.5 }
 }
 
-When attacking, (strength * 0.5) + (skill * 0.5) + weapon power becomes attack power.
+When attacking, the attack power is (strength*0.5)+(technique*0.5)+weapon power.
 
-Example 2:
+Example 2：
 {
-     EC_Command : 'ATTACK'
-   , EC_CommandDuration : 0
-   , SA_AttackValue : { POW:1.5, WPN:1.5 }
-   , SA_DefenceValue : { LUK:2.0 }
+     EC_Command           : 'ATTACK'
+   , EC_CommandDuration   : 0
+   , SA_AttackValue       : { POW:1.5, WPN:1.5 }
+   , SA_DefenceValue      : { LUK:2.0 }
 }
 
-Offensive command skill.
-When attacking with a command skill, (strength * 1.5) + (weapon power * 1.5) becomes attack power.
-Skill owner's attack target's defense power is Luck * 2.0.
+Offensive command skill. When attacking with a command skill, the attack power is (strength *1.5) + (weapon power *1.5). The defense power of the skill holder's attack target will be Luck*2.0.
 
 Example 3:
 {
-     EC_Command : 'WAIT'
-   , EC_CommandDuration : 3
-   , SA_AttackValue : { MAG:3.0, WPN:0.0 }
-   , SA_DefenceValue : { MAG:1.0 }
+     EC_Command           : 'WAIT'
+   , EC_CommandDuration   : 3
+   , SA_AttackValue       : { MAG:3.0, WPN:0.0 }
+   , SA_DefenceValue      : { MAG:1.0 }
 }
 
-standby command skill
-After executing the command skill, (Magic power * 3.0) of the caster for 3 turns becomes the attack power.
-During activation, the attack target's defense power becomes magical power * 1.0.
+Standby command skill After executing the command skill, the caster's (Magic Power*3.0) becomes the attack power for 3 turns.
+While active, the attack target's defense power becomes magic power*1.0.
 
 
-Example 4:
+Example 4：
 {
-     SA_AttackValue : { DEF:1.0, WPN:0.0 }
+     SA_AttackValue  : { DEF:1.0, WPN:0.0 }
    , SA_DefenceValue : { POW:-1.0, DEF:1.0 }
 }
 
-(Defense power * 1.0) becomes attack power when attacking.
-The defense power of the skill owner's attack target is (defense power * 1.0) - strength.
+When attacking, (defense power *1.0) becomes attack power. The defense power of the skill holder's attack target is (defense power *1.0) power.
+
