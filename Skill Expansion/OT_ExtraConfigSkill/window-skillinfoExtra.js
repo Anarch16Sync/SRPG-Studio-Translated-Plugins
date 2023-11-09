@@ -358,19 +358,55 @@ SkillInfoWindow.drawWindowContent = function(x, y) {
 		//---Activated if above the opponent's status
 		if(skill.custom.EC_OverStatus != null)
 		{
-			msg = EC_DefineString.OverStatus;
-			ary = EC_SituationRenderer.getArrayParamMessage(skill.custom.EC_OverStatus, 22);
-			OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, msg, length, color, font);
-			OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, ary, length, ColorValue.LIGHT, font);
+			//msg = EC_DefineString.OverStatus;
+			ary = EC_SituationRenderer.getArrayParamMessageOU(skill.custom.EC_OverStatus);
+			var strOR = '';
+			if( typeof skill.custom.EC_OverStatus['TYPE'] === 'string' ) {
+				if(skill.custom.EC_OverStatus['TYPE']) {
+					strOR = EC_DefineString.UnderStatusOR;
+				}
+			}
+			
+			var cnt = ary.length
+			for(var i=0 ; i < cnt ; i++) {
+				msg = '';
+				if(strOR && i > 0) {
+					msg = strOR;
+				}
+				msg += EC_DefineString.OverUnderStatus + ary[i] + EC_DefineString.OverStatus2;
+				OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, msg, length, color, font);
+			}
+			//if(ary.length <= 1) {
+			//} else {
+			//	OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, msg, length, color, font);
+			//	OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, ary, length, ColorValue.LIGHT, font);
+			//}
+			//OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, msg, length, color, font);
+			//OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, ary, length, ColorValue.LIGHT, font);
 		}
 
 		//---Activated if below the opponent's status
 		if(skill.custom.EC_UnderStatus != null)
 		{
-			msg = EC_DefineString.UnderStatus;
-			ary = EC_SituationRenderer.getArrayParamMessage(skill.custom.EC_UnderStatus, 22);
-			OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, msg, length, color, font);
-			OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, ary, length, ColorValue.LIGHT, font);
+			ary = EC_SituationRenderer.getArrayParamMessageOU(skill.custom.EC_UnderStatus);
+			var strOR = '';
+			if( typeof skill.custom.EC_UnderStatus['TYPE'] === 'string' ) {
+				if(skill.custom.EC_UnderStatus['TYPE']) {
+					strOR = EC_DefineString.UnderStatusOR;
+				}
+			}
+			
+			var cnt = ary.length
+			for(var i=0 ; i < cnt ; i++) {
+				msg = '';
+				if(strOR && i > 0) {
+					msg = strOR;
+				}
+				msg += EC_DefineString.OverUnderStatus + ary[i] + EC_DefineString.UnderStatus2;
+				OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, msg, length, color, font);
+			}
+			//OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, msg, length, color, font);
+			//OT_SkillInfoExtraWindow.rendererMessage(objRendererPos, ary, length, ColorValue.LIGHT, font);
 		}
 	}
 	
@@ -452,17 +488,17 @@ var OT_SkillInfoExtraWindow = {
 		}
 
 		//---Above the opponent's status
-		ary = EC_SituationRenderer.getArrayParamMessage(skill.custom.EC_OverStatus, 22);
+		ary = EC_SituationRenderer.getArrayParamMessageOU(skill.custom.EC_OverStatus, 22);
 		if(ary.length > 0)
 		{
-			count += ary.length + 1;
+			count += ary.length;
 		}
 
 		//---Below the opponent's status
-		ary = EC_SituationRenderer.getArrayParamMessage(skill.custom.EC_UnderStatus, 22);
+		ary = EC_SituationRenderer.getArrayParamMessageOU(skill.custom.EC_UnderStatus, 22);
 		if(ary.length > 0)
 		{
-			count += ary.length + 1;
+			count += ary.length;
 		}
 
 		return count;

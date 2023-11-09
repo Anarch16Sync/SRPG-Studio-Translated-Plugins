@@ -24,6 +24,11 @@
 
   19/11/2019:
   Minor fixes
+
+	2023/10/29:
+	There was a part where almost the same process was performed twice, so I fixed it.
+	If you can use command skills by equipping the weapon you own, even if you don't have it equipped.
+	Fixed so that it is displayed in the command skill list.
   
 --------------------------------------------------------------------------*/
 
@@ -32,11 +37,14 @@ var OT_SkillSelectMenu = defineObject(BaseWindowManager,
 	_unit: null,
 	_skillListWindow: null,
 	_skillInfoWindow: null,
+_CommandSkillArray: null,
 	
 	setMenuTarget: function(unit) {
 		this._unit = unit;
 		this._skillListWindow = createWindowObject(OT_SkillListWindow, this);
 		this._skillInfoWindow = createWindowObject(SkillInfoWindow, this); 
+
+		this.initCommandSkillArray();
 		
 		this._skillListWindow.setSkillFormation(this.getSkillCount());
 		this._setSkillbar(unit);
@@ -79,35 +87,39 @@ var OT_SkillSelectMenu = defineObject(BaseWindowManager,
 		return LayoutControl.getCenterY(-1, 340);
 	},
 
-	getSkillCount: function() {
+	initCommandSkillArray: function() {
 		var unit = this._unit;
-		var arr = OT_getDirectSkillArrayAll(unit, -1, '');
+		var arr = OT_getCommandSkillArrayAll(unit, -1, '');
 		var count = arr.length;
 		var skillCount = 0;
+
+		this._CommandSkillArray = new Array();
 		
 		// Make sure you have a command-type skill
-		for( var i=0 ; i<count ; i++ )
-		{
-			// Is it command activated?
-			if( OT_isCommandSkill(arr[i].skill) )
-			{
-				if( !EC_SkillCheck.isSkillCheckEnable(unit, arr[i].skill) )
-				{
-					continue;
-				}
-
+		for( var i=0 ; i<count ; i++ ) {
 				if(arr[i].skill.custom.EC_Command == OT_SkillCommandType.ATTACK ) {
 					if( !AttackChecker.isUnitAttackable(unit) ) continue;
 					
 					// Check that you can attack with the relevant weapon
 					if( !EC_SkillCheck.isCommandSkillAttackable(unit, arr[i].skill, arr[i].objecttype) ) continue;
 				} else {
+					if( !EC_SkillCheck.isSkillCheckEnableALLWeapon(unit, arr[i].skill) ) continue;
 					if( !EC_SkillCheck.isCommandSkillEnableWeaponCheck(unit, arr[i].skill) ) continue;
 				}
 				
-				skillCount++;
-			}
+				this._CommandSkillArray.push(arr[i]);
 		}
+	},
+	
+	getSkillCount: function() {
+		var unit = this._unit;
+		var count = this._CommandSkillArray.length;
+		var skillCount = 0;
+
+		// Make sure you have command type skills
+		for( var i=0 ; i<count ; i++ ) {
+			skillCount++;
+					}
 		
 		return skillCount;
 	},
@@ -125,35 +137,15 @@ var OT_SkillSelectMenu = defineObject(BaseWindowManager,
 	},
 	
 	_setSkillbar: function(unit) {
-		var arr = OT_getDirectSkillArrayAll(unit, -1, '');
-		var count = arr.length;
+		var count = this._CommandSkillArray.length;
 
 		var scrollbar = this._skillListWindow.getSkillScrollbar();
 
 		scrollbar.resetScrollData();
 
-		// Make sure you have a command-type skill
-		for( var i=0 ; i<count ; i++ )
-		{
-			// Is it command activated?
-			if( OT_isCommandSkill(arr[i].skill) )
-			{
-				if( !EC_SkillCheck.isSkillCheckEnable(unit, arr[i].skill) )
-				{
-					continue;
-				}
-
-				if(arr[i].skill.custom.EC_Command == OT_SkillCommandType.ATTACK ) {
-					if( !AttackChecker.isUnitAttackable(unit) ) continue;
-					
-					// Check that you can attack with the relevant weapon
-					if( !EC_SkillCheck.isCommandSkillAttackable(unit, arr[i].skill, arr[i].objecttype) ) continue;
-				} else {
-					if( !EC_SkillCheck.isCommandSkillEnableWeaponCheck(unit, arr[i].skill) ) continue;
-				}
-				
-				scrollbar.objectSet(arr[i]);
-			}
+		//Check that you have the command type skill
+		for( var i=0 ; i<count ; i++ ) {
+			scrollbar.objectSet(this._CommandSkillArray[i]);
 		}
 		
 		scrollbar.objectSetEnd();

@@ -74,7 +74,14 @@
   
 --------------------------------------------------------------------------*/
 
+//When checking the correction amount due to parameter bonus skills for unit parameters
+//If the value of the parameter being checked does not change,
+//Whether to perform processing to avoid unnecessary checks
+//If operation becomes unstable due to conflict with other plugins, set it to false
+EC_GetSkillCustomCheckPerformance = true;
+
 (function() {
+var OT_NowStatusChk = false;
 
 // Type of Fusion type limitation
 OT_SkillFusionType = {
@@ -148,6 +155,7 @@ SkillRandomizer._isSkillInvokedInternal = function(active, passive, skill)
 		&& skill.custom.EC_ScopePercent == null
 		&& skill.custom.EC_isAbandonIgnore == null
 		&& skill.custom.EC_AddTriggerRate == null
+		&& skill.custom.EC_ParamBonusCheck == null
 	)
 	{
 		EC_Putlog('No compensation for the rate of activation', skill);
@@ -155,80 +163,87 @@ SkillRandomizer._isSkillInvokedInternal = function(active, passive, skill)
 		//Get probabilities for logging
 		Percent = Probability.getInvocationPercent(active, type, value);
 		
-		EC_Putlog('Trigger Rate:' + Percent + '%', skill);
-	}
-	else
-	{
-		// If the setting is around the rate of activation, it will be corrected.
+		EC_Putlog('Probability of activation:' + Percent + '%', skill);
+	} else {
+		// If settings around activation rate are set, correct them.
 
-		// Valid partner check
+		// Check valid partners
 		if (!skill.getTargetAggregation().isCondition(passive)) {
-			EC_Putlog('Cannot be activated for non-effective opponents', skill);
+			EC_Putlog('Cannot be activated because it is not a valid opponent', skill);
 			return false;
 		}
 		
-		//--- Make sure your skills are of the dismissal type
+		//--- Check if the skill is an invalid type skill.
 		if( skill.custom.EC_isAbandonIgnore == null || skill.custom.EC_isAbandonIgnore == false )
 		{
-			// If the opponent can nullify the skill, the skill will not be activated.
+			// If the opponent can nullify the skill, do not activate the skill.
 			if (SkillControl.getBattleSkillFromFlag(passive, active, SkillType.INVALID, InvalidFlag.SKILL) !== null) {
-				EC_Putlog('Cannot be triggered because the opponent has a cut-off', skill);
+				EC_Putlog('Cannot be activated because the opponent has Closeout.', skill);
 				return false;
 			}
 		}
 		else
 		{
-			EC_Putlog('Skill to disable opponents disorientation', skill);
+			EC_Putlog('Skills that invalidate opponents abandonment', skill);
 		}
 		
-		// Default probability
+		// default probability
 		if( skill.custom.EC_DefaultPercent != null )
 		{
 			DefaultPercent = skill.custom.EC_DefaultPercent;
-			EC_Putlog('Default Trigger Rate:'+DefaultPercent, skill);
+			EC_Putlog('Default activation rate:'+DefaultPercent, skill);
 		}
+		
+		//EC_Putlog('coefficient:' + value, skill);
 		
 		// Correction value
 		if( skill.custom.EC_Correction != null )
 		{
-			//Actual skill activation rates are rounded down to the nearest whole number.
+			//The actual skill activation rate will be rounded down to the nearest whole number.
 			value = value * skill.custom.EC_Correction;
 			EC_Putlog('Correction value:'+skill.custom.EC_Correction, skill);
 			EC_Putlog('Corrected coefficient:'+value, skill);
 		}
 	
-		// Get probabilities from parameters
-		// A function is now provided for calculating the activation probability, so that it can be corrected.
-		Percent = Probability.getInvocationPercent(active, type, value);
-		EC_Putlog('Parameter Trigger Bonus:'+Percent, skill);
+		// Get probability from parameters
+		// Fixed because a function for calculating the activation probability is now available.
+		if (type === InvocationType.HPDOWN || type === InvocationType.ABSOLUTE || type === InvocationType.LV) {
+			Percent = Probability.getInvocationPercent(active, type, value);
+		} else {
+			if(typeof skill.custom.EC_ParamBonusCheck === 'boolean') {
+				EC_Putlog('Regarding whether parameter bonuses are considered in activation rate:', skill);
+				EC_Putlog('Prioritize skill settings:' + skill.custom.EC_ParamBonusCheck, skill);
+				Percent = EC_GetParamBonusPercent(active, type, skill) * value;
+			} else {
+				Percent = Probability.getInvocationPercent(active, type, value);
+			}
+		}
+		
+		EC_Putlog('Additional value of activation rate depending on parameters:'+Percent, skill);
 		Percent += DefaultPercent;
 		
-		// Activation rate reflects status value
+		// Status value reflected in activation rate
 		Percent += OT_GetECAddTriggerRate(active, skill);
 
-		// Probability range
-		if( skill.custom.EC_ScopePercent != null )
-		{
+		// probability range
+		if( skill.custom.EC_ScopePercent != null ) {
 			var str = skill.custom.EC_ScopePercent;
 			
-			EC_Putlog('Probability range:' + skill.custom.EC_ScopePercent, skill);
+			EC_Putlog('probability range:' + skill.custom.EC_ScopePercent, skill);
 			var regex = /^([0-9]+)\-([0-9]+)\%$/;
-			if (str.match(regex))
-			{
+			if (str.match(regex)) {
 				var min = parseInt(RegExp.$1);
 				var max = parseInt(RegExp.$2);
-				if(Percent < min)
-				{
+				if(Percent < min) {
 					Percent = min;
 				}
 	
-				if(Percent > max)
-				{
+				if(Percent > max) {
 					Percent = max;
 				}
 			}
 		}
-		EC_Putlog('Trigger Rate (rounded):' + Math.round( Percent ) + '%', skill);
+		EC_Putlog('Activation probability (rounded to the nearest whole number):' + Math.round( Percent ) + '%', skill);
 		result = Probability.getProbability(Percent);
 	}
 
@@ -250,6 +265,18 @@ SkillRandomizer._isSkillInvokedInternal = function(active, passive, skill)
 				active.custom.tmpActivateFastAttack = true;
 				break;
 		}
+		
+		// If you set prohibition on follow-up when activated
+		if(EC_isRoundNoAttack(skill)) {
+			EC_Putlog('Pursuit prohibited by skill activation', skill);
+			active.custom.EC_TmpRoundNoAttack = true;
+		}
+		
+		// If you set prohibition of follow-up (attack once) when activated.
+		if(EC_isRoundOneAttack(skill)) {
+			EC_Putlog('Pursuit prohibited by skill activation', skill);
+			active.custom.EC_TmpRoundOneAttack = true;
+		}
 	}
 	
 	EC_Putlog('Skill activation:' + result, skill);
@@ -258,7 +285,7 @@ SkillRandomizer._isSkillInvokedInternal = function(active, passive, skill)
 
 EC_SkillCheck = {
 
-	// Count the number of times the skill is activated
+	// Count the number of skill activations
 	TriggerCountUp: function(active, skill) {
 		var id = skill.getId();
 
@@ -267,7 +294,7 @@ EC_SkillCheck = {
 			return false;
 		}
 
-		// Initialisation of the number of activations
+		// Initialize the number of activations
 		if( active.custom.tmpSkillTriggerCount == null )
 		{
 			active.custom.tmpSkillTriggerCount = Array();
@@ -331,7 +358,7 @@ EC_SkillCheck = {
 			return true;
 		}
 
-		// Debug message composition 
+		// Debug message composition
 		var msg = 'Number of times it can be activated';
 
 		// Combat
@@ -378,7 +405,7 @@ EC_SkillCheck = {
 			}
 		}
 
-		// turn 
+		// turn
 		if( skill.custom.EC_TriggerCountTurn != null )
 		{
 			if( skill.custom.EC_TriggerCountTurn <= tmp.TURN )
@@ -547,9 +574,8 @@ EC_SkillCheck = {
 		
 		return false;
 	},
-
-	// Judgment of availability from the current state when using command skills
-	isSkillCheckEnable: function(unit, skill, isAfterCheck) {
+    //Determine whether command skills can be used based on the current state when using them
+	isSkillCheckEnable: function(unit, skill, isAfterCheck, isNoTarget) {
 		if( unit == null || skill == null )
 		{
 			return false;
@@ -559,11 +585,48 @@ EC_SkillCheck = {
 			isAfterCheck = false;
 		}
 		
+		if(typeof isNoTarget == 'undefined') {
+			isNoTarget = false;
+		}
+		
 		// Display skill name
 		EC_Putlog('Skill name:'+skill.getName(), skill);
-
-		// Confirm that the number of commands is not caught in the limit
+		
+		// Check that the number of commands is not within the limit.
 		if( !this.isCheckTriggerCountCommand(unit, skill, isAfterCheck) ) return false;
+
+		// When setting up the other party's status check
+		// Check that the other person is present
+		//var targetUnit = null;
+		//if(typeof unit.custom.tmpNowVirtualAttack != 'undefined') {
+		//	EC_Putlog('tmpNowVirtualAttack', skill);
+		//	targetUnit = unit.custom.tmpNowVirtualAttack.tmpECTargetUnit;
+		//} else if(unit.custom.tmpECTarget) {
+		//	targetUnit = unit.custom.tmpECTarget;
+		//	EC_Putlog('unit.custom.tmpECTarget', skill);
+		//}
+		
+		// When setting up the other party's status check
+		// Measures to prevent it from being reflected when opening the menu etc.
+		if(isAfterCheck && !isNoTarget) {
+			if( skill.custom.EC_OpponentNowStatus != null ) {
+				// no target specified
+				//EC_Putlog('no target specified', skill);
+				return false;
+			}
+
+			if( skill.custom.EC_OverStatus != null ) {
+				// no target specified
+				//EC_Putlog('no target specified', skill);
+				return false;
+			}
+
+			if( skill.custom.EC_UnderStatus != null ) {
+				// no target specified
+				//EC_Putlog('no target specified', skill);
+				return false;
+			}
+		}
 		
 		if(!isAfterCheck) {
 			// Check if it's in cool time
@@ -581,11 +644,76 @@ EC_SkillCheck = {
 		
 		// Check if it can be activated by the number of turns
 		if( !EC_SituationCheck.isEnableTurn(skill) ) return false;
-		
+
 		return true;
 	},
 
-	// Judgment that it can be used from the current state when using the attack type command skill
+	//When using a command skill, determine whether it can be used based on the current state
+	isSkillCheckEnableALLWeapon: function(unit, skill, isAfterCheck) {
+		var weapon = ItemControl.getEquippedWeapon(unit);
+		var tmpHP = unit.getHp();
+		var tmpEP = 0;
+		var tmpFP = 0;
+		if(typeof UnitParameter.MEP !== 'undefined') {
+			tmpEP = OT_GetNowEP(unit);
+		}
+		if(typeof UnitParameter.MFP !== 'undefined') {
+			tmpFP = OT_GetNowFP(unit);
+		}
+		
+		var Items = EC_GetEquipableWeapons(unit);
+		var count = Items.length
+		
+		var isOK = false;
+		count = Items.length;
+		//Make sure you have command type skills
+		for( var i=0 ; i<count ; i++ ) {
+			var item = Items[i];
+			//If the weapon is not equipped, the judgment cannot be performed correctly, so temporarily equip it.
+			if(unit.getHp() < tmpHP) {
+				unit.setHp(tmpHP);
+			}
+			if(typeof UnitParameter.MEP !== 'undefined') {
+				if(OT_GetNowEP(unit) < tmpEP) {
+					unit.custom.tmpNowEp = tmpEP;
+				}
+			}
+			if(typeof UnitParameter.MFP !== 'undefined') {
+				if(OT_GetNowFP(unit) < tmpFP) {
+					unit.custom.tmpNowFp = tmpFP;
+				}
+			}
+			ItemControl.setEquippedWeapon(unit, item);
+			if( EC_SkillCheck.isSkillCheckEnable(unit, skill, isAfterCheck) ) {
+				isOK = true;
+				break;
+			}
+		}
+
+		// Change to the equipment equipped before the check process
+		if(weapon) {
+			ItemControl.setEquippedWeapon(unit, weapon);
+		}
+		
+		// Fixed hp decreased during check process
+		if(unit.getHp() < tmpHP) {
+			unit.setHp(tmpHP);
+		}
+		if(typeof UnitParameter.MEP !== 'undefined') {
+			if(OT_GetNowEP(unit) < tmpEP) {
+				unit.custom.tmpNowEp = tmpEP;
+			}
+		}
+		if(typeof UnitParameter.MFP !== 'undefined') {
+			if(OT_GetNowFP(unit) < tmpFP) {
+				unit.custom.tmpNowFp = tmpFP;
+			}
+		}
+		
+		return isOK;
+	},
+
+	// When using offensive command skills, determine whether they can be used based on the current state.
 	isSkillCheckEnableTypeAttack: function(unit, targetUnit, skill, isAfterCheck) {
 		if( unit == null || skill == null )
 		{
@@ -596,30 +724,36 @@ EC_SkillCheck = {
 			isAfterCheck = false;
 		}
 		
-		//Display skill name
-		EC_Putlog('スキル名:'+skill.getName(), skill);
+		// Display skill name
+		EC_Putlog('Skill name:'+skill.getName(), skill);
 
-		// Confirm that the number of commands is not caught in the limit
+		// Check that the number of commands is not within the limit.
 		if( !this.isCheckTriggerCountCommand(unit, skill, isAfterCheck) ) return false;
 		
 		if(!isAfterCheck) {
-			// Check if it's in cool time
+			// Check if it is not in cooldown time
 			if( this.getCoolTime(unit, skill.getId()) > 0 ) return false;
 			
-			// Confirm that EP has a certain value before use
+			// Confirm that Ep is at a certain value before use.
 			if( !this.isUseEP(unit, skill, skill.custom.EC_UseEP) ) return false;
 	
-			// Confirm that FP has a certain value before use
+			// Confirm that Fp is at a certain value before use.
 			if( !this.isUseFP(unit, skill, skill.custom.EC_UseFP) ) return false;
 		}
 		
 		// Check if the status is within a certain range
 		if( !this.isNowStatusInRange(unit, targetUnit, skill) ) return false;
+
+		//---Activates if the status is higher than the opponent's.
+		if( !this.CheckOverStatus(unit, targetUnit, skill) ) return false;
+	
+		//---Activates if the status is lower than the opponent's.
+		if( !this.CheckUnderStatus(unit, targetUnit, skill) ) return false;
 		
-		//Activated at a distance from the opponent
+		// Activates at a distance from the opponent
 		if( !EC_SituationCheck.isRangeEnable(unit, targetUnit, skill) ) return false;
 		
-		// Check if it can be activated by the number of turns
+		// Check if it can be activated in the number of turns
 		if( !EC_SituationCheck.isEnableTurn(skill) ) return false;
 
 		return true;
@@ -630,31 +764,76 @@ EC_SkillCheck = {
 	// Check if the command skill attached to the weapon can attack with the set weapon
 	isCommandSkillAttackable: function(unit, skill, objecttype) {
 		var i, j, k, item, indexArray;
-		var count = UnitItemControl.getPossessionItemCount(unit);
-		for (i = 0; i < count; i++) {
-			item = UnitItemControl.getItem(unit, i);
-			if(this.isCommandSkillAttackableWeapon(unit, skill, item, objecttype)) {
-				return true;
-				}
+		var weapon = ItemControl.getEquippedWeapon(unit);
+		var tmpHP = unit.getHp();
+		var tmpEP = 0;
+		var tmpFP = 0;
+		if(typeof UnitParameter.MEP !== 'undefined') {
+			tmpEP = OT_GetNowEP(unit);
 		}
-		return false;
+		if(typeof UnitParameter.MFP !== 'undefined') {
+			tmpFP = OT_GetNowFP(unit);
+		}
+		
+		var isOK = false;
+		var Items = EC_GetEquipableWeapons(unit);
+		var count = Items.length
+		for (i = 0; i < count; i++) {
+			item = Items[i];
+			if(unit.getHp() < tmpHP) {
+				unit.setHp(tmpHP);
+			}
+			if(typeof UnitParameter.MEP !== 'undefined') {
+				if(OT_GetNowEP(unit) < tmpEP) {
+					unit.custom.tmpNowEp = tmpEP;
+				}
+			}
+			if(typeof UnitParameter.MFP !== 'undefined') {
+				if(OT_GetNowFP(unit) < tmpFP) {
+					unit.custom.tmpNowFp = tmpFP;
+				}
+			}
+			ItemControl.setEquippedWeapon(unit, item);
+			if(this.isCommandSkillAttackableWeapon(unit, skill, item, objecttype)) {
+				isOK = true;
+				break;
+			}
+		}
+		
+		if(weapon) {
+			ItemControl.setEquippedWeapon(unit, weapon);
+		}
+		if(unit.getHp() < tmpHP) {
+			unit.setHp(tmpHP);
+		}
+		if(typeof UnitParameter.MEP !== 'undefined') {
+			if(OT_GetNowEP(unit) < tmpEP) {
+				unit.custom.tmpNowEp = tmpEP;
+			}
+		}
+		if(typeof UnitParameter.MFP !== 'undefined') {
+			if(OT_GetNowFP(unit) < tmpFP) {
+				unit.custom.tmpNowFp = tmpFP;
+			}
+		}
+		return isOK;
 	},
 
-	// Check if the weapon can attack according to the conditions of the command skill
+	// Check if the weapon matches the command skill conditions and can attack.
 	isCommandSkillAttackableWeapon: function(unit, skill, item, objecttype) {
 		var i, j, k, item, indexArray;
 		if (ItemControl.isWeaponAvailable(unit, item)) {
-				// If you want to check if the weapon is physical or magic
-				// Do you have a matching weapon with your own weapon?
-				if( typeof skill.custom.EC_isPhysics == 'boolean' ) {
-					var isPhysics = Miscellaneous.isPhysicsBattle(item);
-					if( isPhysics != skill.custom.EC_isPhysics ) {
-					return false;
-					}
+			//When checking whether the weapon is physical or magical,
+			//Do you have a matching weapon?
+			if( typeof skill.custom.EC_isPhysics == 'boolean' ) {
+				var isPhysics = Miscellaneous.isPhysicsBattle(item);
+				if( isPhysics != skill.custom.EC_isPhysics ) {
+				return false;
 				}
+			}
 				
-				// If the skill is given to a weapon, check if you can attack with that weapon.
-				if(objecttype === ObjectType.WEAPON) {
+			// If the skill is attached to a weapon, check whether you can attack with that weapon.
+			if(objecttype === ObjectType.WEAPON) {
 				var bNG = true;
 					var list = item.getSkillReferenceList();
 					var count2 = list.getTypeCount();
@@ -669,56 +848,56 @@ EC_SkillCheck = {
 			}
 			
 			if( skill.custom.EC_Command == OT_SkillCommandType.ATTACK ) {
-				// In the case of attack type, check if the skill can be activated against enemies within range
+				// If it is an attack type, check if the skill can be activated against enemies within range.
 				indexArray = AttackChecker.getAttackIndexArray(unit, item, false);
 				if (indexArray.length == 0) {
 					return false;
 				}
 				
-							var count3 = indexArray.length;
-							for (k = 0; k < count3; k++) {
-								var index = indexArray[k];
-								var x = CurrentMap.getX(index);
-								var y = CurrentMap.getY(index);
-								var targetUnit = PosChecker.getUnitFromPos(x, y);
-								if (targetUnit !== null && unit !== targetUnit) {
-									// Check if the skill activation conditions are met
-									if( this.isSkillCheckEnableTypeAttack(unit, targetUnit, skill) == true ) {
-										return true;
-									}
-								}
-							}
-				} else {
-				// In the case of standby type, it does not check against enemies within range
-					return true;
+				var count3 = indexArray.length;
+				for (k = 0; k < count3; k++) {
+					var index = indexArray[k];
+					var x = CurrentMap.getX(index);
+					var y = CurrentMap.getY(index);
+					var targetUnit = PosChecker.getUnitFromPos(x, y);
+					if (targetUnit !== null && unit !== targetUnit) {
+						// Check if skill activation conditions are met
+						if( this.isSkillCheckEnableTypeAttack(unit, targetUnit, skill) == true ) {
+							return true;
+						}
+					}
 				}
+			} else {
+				// If it is a standby type, it will not check against enemies within range.
+				return true;
 			}
+		}
 		return false;
 	},
 
-	// When the weapon condition is set in the activation condition of the corresponding skill, check if it can be activated with the owned weapon
+	// When a weapon condition is set in the activation condition of the skill, check whether it can be activated with the weapon you own.
 	isCommandSkillEnableWeaponCheck: function(unit, skill) {
 		var i, j, k, item, indexArray;
-		var count = UnitItemControl.getPossessionItemCount(unit);
+		var Items = EC_GetEquipableWeapons(unit);
+		var count = Items.length
 		var err = true;
-		
+
+		count = Items.length
 		for (i = 0; i < count; i++) {
-			item = UnitItemControl.getItem(unit, i);
-			if (ItemControl.isWeaponAvailable(unit, item)) {
-				// When checking whether the attack type is physical or magic,
-				// Do you have a matching weapon with your own weapon?
-				if( typeof skill.custom.EC_isPhysics == 'boolean' ) {
-					var isPhysics = Miscellaneous.isPhysicsBattle(item);
-					if( isPhysics == skill.custom.EC_isPhysics ) {
-						return true;
-					}
-				} else {
+			item = Items[i];
+			// When checking whether the attack type is physical or magic,
+			// Do you have a matching weapon in your possession?
+			if( typeof skill.custom.EC_isPhysics == 'boolean' ) {
+				var isPhysics = Miscellaneous.isPhysicsBattle(item);
+				if( isPhysics == skill.custom.EC_isPhysics ) {
 					return true;
 				}
+			} else {
+				return true;
 			}
 		}
 		
-		// If you do not have a weapon, make it unselectable if the skill has a weapon-related activation condition.
+		// If you do not have a weapon, you will not be able to select the skill if it has activation conditions related to a weapon.
 		if(count == 0) {
 			if( typeof skill.custom.EC_isPhysics == 'boolean' ) {
 				return false;
@@ -729,14 +908,13 @@ EC_SkillCheck = {
 		return false;
 	},
 		
-	// Confirm that the specified status is within the range
+	// Check that the specified status is within the range
 	isNowStatusInRange: function(active, passive, skill) {
 		var now         = skill.custom.EC_NowStatus;
 		var opponentNow = skill.custom.EC_OpponentNowStatus;
 
-		if( now != null && active != null )
-		{
-			EC_Putlog('Check the status range of the invoker', skill);
+		if( now != null && active != null ) {
+			EC_Putlog('Casters status range check', skill);
 			for( var key in now )
 			{
 				if( !this.isParamInRange(active, skill, key, now[key]) )
@@ -746,9 +924,8 @@ EC_SkillCheck = {
 			}
 		}
 		
-		if( opponentNow != null && passive != null )
-		{
-			EC_Putlog('Check the status range of the other party', skill);
+		if( opponentNow != null && passive != null ) {
+			EC_Putlog('Check opponents status range', skill);
 			for( var key in opponentNow )
 			{
 				if( !this.isParamInRange(passive, skill, key, opponentNow[key]) )
@@ -761,115 +938,92 @@ EC_SkillCheck = {
 		return true;
 	},
 
-	// Check if the parameter is within range
-	isParamInRange: function(unit, skill, type, strRange) {
-		// No parameters declared
-		if(UnitParameter[type] == 'undefined')
-		{
-			root.log(type + 'Is an undeclared parameter.');
-			return 0;
+	// Check if parameters are within range
+	isParamInRange: function(unit, skill, type, strRange, isSelf) {
+		if(OT_NowStatusChk) {
+			return false;
+		}
+			
+		if(skill.getSkillType() == SkillType.PARAMBONUS) {
+			OT_NowStatusChk = true;
 		}
 		
-		var now = 0;
-		var max = 0;
-		var paramName = type;
+		var val = EC_StatusCheck.isParamInRange(unit, skill, type, strRange);
 		
-		switch(type)
-		{
-			// HP, EP, FP get the current value and the maximum value respectively
-			case 'HP':
-				if(typeof unit.custom.tmpNowVirtualAttack == 'undefined')
-				{
-					now = unit.getHp();;
-				}
-				else
-				{
-					now = unit.custom.tmpNowVirtualAttack.hp;
-				}
-
-				max = ParamBonus.getMhp(unit);
-				break;
-
-			case 'EP':
-				now = OT_GetNowEP(unit) - unit.custom.tmpUseEP;
-				max = ParamBonus.getEp(unit);
-				break;
-
-			case 'FP':
-				now = OT_GetNowFP(unit) - unit.custom.tmpUseFP;
-				max = ParamBonus.getFp(unit);
-				break;
-
-			// For parameters other than HP, EP, and FP, the maximum value is set as the growth limit value.
-			case 'LV':
-				now = unit.getLv();
-				max = Miscellaneous.getMaxLv(unit);
-				break;
-
-			default:
-				now = ParamBonus.getBonus(unit, ParamType[type]);
-				max = UnitParameter[type].getMaxValue(unit);
-				paramName = UnitParameter[type].getParameterName();
-
-				break;
+		if(skill.getSkillType() == SkillType.PARAMBONUS) {
+			OT_NowStatusChk = false;
 		}
 		
-		return this.isValueInRange(skill, now, max, strRange, paramName);
+		return val;
 	},
 
-	// Check if the value is within range
+	// Check if value is within range
 	isValueInRange: function(skill, nowValue, maxValue, str, paramName) {
-		if( str == null )
-		{
+		return EC_StatusCheck.isValueInRange(skill, nowValue, maxValue, str, paramName);
+	},
+
+	// Check if your status is higher than your opponent
+	CheckOverStatus: function(active, passive, skill) {
+		if(typeof skill.custom.EC_OverStatus === 'undefined') {
+			//EC_Putlog('CheckOverStatus:Not declared', skill)
 			return true;
 		}
 		
-		var regex = /^([0-9]+)\-([0-9]+)\%$/;
-		var regexNum = /^([0-9]+)\-([0-9]+)$/;
-		//EC_Putlog(paramName + ':' + nowValue, skill);
-		if (str.match(regex))
-		{
-			var min = parseInt(RegExp.$1);
-			var max = parseInt(RegExp.$2);
-			var MinPercent = Math.floor( maxValue * (min / 100) );
-			var MaxPercent = Math.floor( maxValue * (max / 100) );
-
-			EC_Putlog(paramName +  ':' + nowValue +' Activation range:' + MinPercent + ' to ' + MaxPercent + '(' + str + ')', skill);
-
-			if( nowValue < MinPercent || MaxPercent < nowValue )
-			{
-				return false;
-			}
+		if(OT_NowStatusChk) {
+			return false;
 		}
-		else if(str.match(regexNum))
-		{
-			var min = parseInt(RegExp.$1);
-			var max = parseInt(RegExp.$2);
-			EC_Putlog(paramName +  ':' + nowValue +' Activation range:' + min + ' to ' + max, skill);
-
-			if( nowValue < min || max < nowValue )
-			{
-				return false;
-			}
+			
+		if(skill.getSkillType() == SkillType.PARAMBONUS) {
+			OT_NowStatusChk = true;
 		}
 		
-		return true;
+		var val = EC_StatusCheck.CheckOverStatus(active, passive, skill);
+		
+		if(skill.getSkillType() == SkillType.PARAMBONUS) {
+			OT_NowStatusChk = false;
+		}
+
+		return val;
 	},
 
-	// Check if the consumption EP is enough
+	// Check if your status is lower than your opponent
+	CheckUnderStatus: function(active, passive, skill) {
+		if(typeof skill.custom.EC_UnderStatus === 'undefined') {
+			//EC_Putlog('CheckUnderStatus:Not declared', skill)
+			return true;
+		}
+		
+		if(OT_NowStatusChk) {
+			return false;
+		}
+			
+		if(skill.getSkillType() == SkillType.PARAMBONUS) {
+			OT_NowStatusChk = true;
+		}
+		
+		var val = EC_StatusCheck.CheckUnderStatus(active, passive, skill);
+		
+		if(skill.getSkillType() == SkillType.PARAMBONUS) {
+			OT_NowStatusChk = false;
+		}
+
+		return val;
+	},
+
+	// Check if there is enough ep consumed
 	isUseEP: function(unit, skill, value) {
 		if( unit == null || skill == null )
 		{
 			return false;
 		}
 		
-		// Check consumption EP
-		// If you can only attack or activate the skill, give priority to the attack
+		// Check consumption ep
+		// If you can only attack or activate skills, prioritize attack.
 		if( value != null )
 		{
 			if(typeof OT_GetUseEP === 'undefined')
 			{
-				root.log('EP use: EP system not installed');
+				root.log('Using EP: EP system has not been installed');
 			}
 			else
 			{
@@ -1194,7 +1348,7 @@ NormalAttackOrderBuilder._endVirtualAttack = function(virtualActive, virtualPass
 	EC_SkillCheck.ResetTriggerCount(passive, OT_SkillTriggerCountType.BATTLE);
 };
 
-// If the activation count limit type is a turn, reset the activation count at the beginning of your army turn.
+// 発動回数制限タイプがターンなら、自軍ターン開始時に発動回数をリセットする
 var alias3 = TurnMarkFlowEntry.doMainAction;
 TurnMarkFlowEntry.doMainAction = function(isMusic)
 {
@@ -1314,7 +1468,24 @@ OT_getDirectSkillArrayAll = function(unit, skilltype, keyword) {
 	return SkillControl._getValidSkillArray(arr);
 };
 
-// Get the setting value of EC_AddTriggerRate
+// Acquire all command skills including the currently unequipped weapons.
+OT_getCommandSkillArrayAll = function(unit, skilltype, keyword) {
+	var arrBefore = OT_getDirectSkillArrayAll(unit, skilltype, keyword);
+	var count = arrBefore.length;
+	var arr = new Array();
+
+	// Make sure you have command type skills
+	for( var i=0 ; i<count ; i++ ) {
+		// Is it a command-driven type?
+		if( OT_isCommandSkill(arrBefore[i].skill) ) {
+			arr.push(arrBefore[i]);
+		}
+	}
+	
+	return arr;
+}
+
+// Get the setting value of Ec add trigger rate
 OT_GetECAddTriggerRate = function(unit, skill) {
 	var now = skill.custom.EC_AddTriggerRate;
 	var result = 0;
@@ -1327,10 +1498,15 @@ OT_GetECAddTriggerRate = function(unit, skill) {
 };
 
 OT_GetECAddTriggerRateValue = function(unit, skill, type, value) {
-	// No parameters declared
+	// parameter not declared
 	if(UnitParameter[type] == 'undefined') {
 		root.log(type + 'Is an undeclared parameter.');
 		return 0;
+	}
+	
+	if(typeof value === 'string') {
+		value = parseFloat(value);
+		//root.log('Convert string numbers to numbers:' + value);
 	}
 	
 	var now = 0;
@@ -1341,41 +1517,155 @@ OT_GetECAddTriggerRateValue = function(unit, skill, type, value) {
 		// HP, EP, FP get the current value and the maximum value respectively
 		case 'HP':
 			now = unit.getHp();
-			max = ParamBonus.getMhp(unit);
 			break;
 
 		case 'EP':
 			now = OT_GetNowEP(unit) - unit.custom.tmpUseEP;
-			max = ParamBonus.getEp(unit);
 			break;
 
 		case 'FP':
 			now = OT_GetNowFP(unit) - unit.custom.tmpUseFP;
-			max = ParamBonus.getFp(unit);
 			break;
 
 		// For parameters other than HP, EP, and FP, the maximum value is set as the growth limit value.
 		case 'LV':
 			now = unit.getLv();
-			max = Miscellaneous.getMaxLv(unit);
 			break;
 
 		default:
-			if (DataConfig.isSkillInvocationBonusEnabled()) {
-				now = ParamBonus.getBonus(unit, ParamType[type]);
-			}
-			else {
-				now = unit.getParamValue(ParamType[type]);
-			}
-
-			max = UnitParameter[type].getMaxValue(unit);
-			paramName = UnitParameter[type].getParameterName();
-
+			now = EC_GetParamBonusPercent(unit, type, skill);
 			break;
 	}
 	var result = Math.floor(now * value);
-	EC_Putlog('Addition activation rate:' + paramName + '(' + now + ')×' + value + '＝' + result, skill);
+	EC_Putlog('Additional activation rate:' + paramName + '(' + now + ')x' + value + '=' + result, skill);
 	return result;
+};
+
+//Measures to avoid unnecessary checks with parameter bonus skills
+//If this is not done, unnecessary checks will be performed for the total number of statuses.
+//
+//getUnitTotalParamBonus has been significantly modified in the getUnitTotalParamBonus function.
+//The third argument of SkillControl.getSkillObjectArray is SkillType.PARAMBONUS
+//The process can be performed without any problem unless it is executed twice.
+//(There is no problem as long as getUnitTotalParamBonus is called within SkillControl.getSkillObjectArray)
+var tmpECParameterType = new Array();
+var alias99 = BaseUnitParameter.getUnitTotalParamBonus;
+BaseUnitParameter.getUnitTotalParamBonus = function(unit, weapon) {
+	tmpECParameterType.push(this.getParameterType());
+	var val = alias99.call(this, unit, weapon);
+	tmpECParameterType.pop();
+	return val;
+};
+
+//If it is a support skill, check the activation check at the skill retention confirmation section.
+var alias100 = SkillControl.getSkillObjectArray;
+SkillControl.getSkillObjectArray = function(unit, weapon, skilltype, keyword, objectFlag) {
+	var tmpType = -1;
+	if(skilltype == SkillType.PARAMBONUS && tmpECParameterType.length > 0 && EC_GetSkillCustomCheckPerformance) {
+		tmpType = tmpECParameterType[tmpECParameterType.length - 1];
+		//tmpType = tmpECParameterType.pop();
+	}
+	
+	var arr = alias100.call(this, unit, weapon, skilltype, keyword, objectFlag);
+	if(skilltype == SkillType.SUPPORT || skilltype == SkillType.PARAMBONUS) {
+		var i, skill;
+		var count = arr.length;
+		var returnArr = [];
+		var targetUnit = null;
+		if(typeof unit.custom.tmpNowVirtualAttack != 'undefined') {
+			targetUnit = unit.custom.tmpNowVirtualAttack.tmpECTargetUnit;
+		} else if(unit.custom.tmpECTarget) {
+			targetUnit = unit.custom.tmpECTarget;
+		}
+
+		for (i = 0; i < count; i++) {
+			skill = arr[i].skill;
+			if(skilltype == SkillType.PARAMBONUS) {
+				if(tmpType != -1) {
+					// Exclude if there is no increase or decrease in parameters
+					var val = skill.getParameterBonus().getAssistValue(tmpType);
+					if(val == 0) {
+						//root.log('Status check:' + tmpType);
+						continue;
+					}
+					//root.log('plus:' + val);
+				}
+			}
+			
+			// Check whether command skills can be read or not
+			if(typeof OT_isCommandSkill != 'undefined') {
+				if(OT_isCommandSkill(skill)) {
+					// If it is a command skill, check whether it is activated by command.
+					if(!EC_SkillCheck.SkillCheckCommand(unit, skill, false)) {
+						continue;
+					}
+				}
+			}
+			
+			// Check activation conditions
+			if(targetUnit) {
+				//root.log('getSkillObjectArray:1');
+				if(!EC_SkillCheck.isSkillCheckEnableTypeAttack(unit, targetUnit, skill, true)) {
+					continue;
+				}
+			} else {
+				//root.log('getSkillObjectArray:2');
+				if(!EC_SkillCheck.isSkillCheckEnable(unit, skill, true)) {
+					continue;
+				}
+			}
+			
+			returnArr.push(arr[i]);
+		}
+		
+		return returnArr;
+	}
+	
+	return arr;
+};
+
+//When you have a parameter bonus skill that increases or decreases the maximum HP with activation conditions set
+//If the conditions are not met when the unit appears, the current HP will exceed the maximum HP, so make corrections.
+var cacheMhp = 0;
+var aliasGetMHP = ParamBonus.getMhp;
+ParamBonus.getMhp = function(unit) {
+	var val = aliasGetMHP.call(this, unit);
+	cacheMhp = val;
+	return val;
+};
+
+var aliasUpdateHP = MapHpControl.updateHp;
+MapHpControl.updateHp = function(unit) {
+	aliasUpdateHP.call(this, unit);
+	if(unit.getHp() > cacheMhp) {
+		//root.log(unit.getName() + '：HP correction');
+		//root.log(unit.getHp() + ' => ' + cacheMhp);
+		unit.setHp(cacheMhp);
+	}
+};
+
+// If there is a prohibition on pursuit or cancellation of counterattack when activated, it will be suspended.
+var aliasRound = VirtualAttackControl.isRound;
+VirtualAttackControl.isRound = function(virtualAttackUnit)
+{
+	//If the setting is to prohibit follow-up when the skill is activated,
+	//Forcibly terminate when skill is activated
+	if(!virtualAttackUnit.unitSelf.custom.EC_TmpRoundCheckBefore) {
+		//Exclude if you have not attacked even once
+		if(virtualAttackUnit.unitSelf.custom.EC_TmpRoundOneAttack) {
+			virtualAttackUnit.roundCount = 0;
+			return false;
+		}
+	}
+	delete virtualAttackUnit.unitSelf.custom.EC_TmpRoundCheckBefore;
+
+	//This force closes even if you are not attacking.
+	if(virtualAttackUnit.unitSelf.custom.EC_TmpRoundNoAttack) {
+		virtualAttackUnit.roundCount = 0;
+		return false;
+	}
+	
+	return aliasRound.call(this, virtualAttackUnit);
 };
 
 })();

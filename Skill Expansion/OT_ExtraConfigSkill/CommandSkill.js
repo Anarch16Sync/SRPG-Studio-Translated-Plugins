@@ -42,6 +42,17 @@
   2020/05/18:
   In version 1.210 of the studio, a new feature was added to allow you to change weapons when attacking and then cancel.
   Fixed an error when cancelling in the weapon selection screen of the attack type command skill.
+
+  2023/10/24:
+  Move some of the functions to ExtraConfigSkill.js
+  Parameter bonus skill related changes have been significantly revised.
+  
+  Significantly revised the command display of command skills, the list of usable command skills, and the processing of the weapon list.
+  Previously, it was determined whether a command skill could be used based on the current equipment state.
+  If you can use command skills by equipping the weapon you own, even if you don't have it equipped.
+  It will now be displayed in the command skill list,
+  The weapon list has also been corrected so that weapons that fall outside of the activation conditions will not be displayed when equipped.
+  From now on, the update history will not be included in the script header, but will be written in readme.txt.
   
 --------------------------------------------------------------------------------------------------*/
 
@@ -109,6 +120,7 @@ UnitCommand.SkillCommand = defineObject(UnitCommand.Attack,
 	_selectSkillEntry: null,
 	_selectWeapon: null,
 	_skill: null,
+	_weaponArray: null,
 
 	moveCommand: function() {
 		var mode = this.getCycleMode();
@@ -186,6 +198,7 @@ UnitCommand.SkillCommand = defineObject(UnitCommand.Attack,
 					//	this._weaponSelectMenu._setWeaponSkillFormation(skill);
 					//	this._weaponSelectMenu._setWeaponSkillbar(this.getCommandTarget(), skill);
 					//}
+					this._weaponSelectMenu._initWeaponArray(skill, _selectSkillEntry.objecttype);
 					this._weaponSelectMenu._setWeaponSkillFormation(skill, _selectSkillEntry.objecttype);
 					this._weaponSelectMenu._setWeaponSkillbar(this.getCommandTarget(), skill, _selectSkillEntry.objecttype);
 					
@@ -297,6 +310,9 @@ UnitCommand.SkillCommand = defineObject(UnitCommand.Attack,
 		var indexArrayTmp = this._getIndexArray(unit, weapon);
 		var count = indexArrayTmp.length;
 		
+		// Equip selected item
+		ItemControl.setEquippedWeapon(unit, weapon);
+		
 		for (i = 0; i < count; i++) {
 			var index = indexArrayTmp[i];
 			var x = CurrentMap.getX(index);
@@ -309,9 +325,6 @@ UnitCommand.SkillCommand = defineObject(UnitCommand.Attack,
 				}
 			}
 		}
-		
-		// Equip the selected item
-		ItemControl.setEquippedWeapon(unit, weapon);
 		
 		this._posSelector.setUnitOnly(unit, weapon, indexArray, PosMenuType.Attack, filter);
 		this._posSelector.setFirstPos();
@@ -329,8 +342,24 @@ UnitCommand.SkillCommand = defineObject(UnitCommand.Attack,
 			//	this._weaponSelectMenu._setWeaponSkillFormation(_selectSkillEntry.skill);
 			//	this._weaponSelectMenu._setWeaponSkillbar(this.getCommandTarget(), _selectSkillEntry.skill);
 			//}
+			this._weaponSelectMenu._initWeaponArray(_selectSkillEntry.skill, _selectSkillEntry.objecttype);
 			this._weaponSelectMenu._setWeaponSkillFormation(_selectSkillEntry.skill, _selectSkillEntry.objecttype);
 			this._weaponSelectMenu._setWeaponSkillbar(this.getCommandTarget(), _selectSkillEntry.skill, _selectSkillEntry.objecttype);
+		} else if(mode === OT_SkillCommandMode.RESULT) {
+			var skill = _selectSkillEntry.skill;
+			var unit = this.getCommandTarget();
+			
+			//// If you set prohibition on follow-up when activated
+			//if(EC_isRoundNoAttack(skill)) {
+			//	unit.custom.EC_TmpRoundNoAttack = true;
+			//	unit.custom.EC_TmpRoundLimitCommandSkill = true;
+			//}
+			//
+			//// If you set prohibition of follow-up (attack once) when activated.
+			//if(EC_isRoundOneAttack(skill)) {
+			//	unit.custom.EC_TmpRoundOneAttack = true;
+			//	unit.custom.EC_TmpRoundLimitCommandSkill = true;
+			//}
 		}
 		
 		return moveResult;
@@ -378,34 +407,28 @@ UnitCommand.SkillCommand = defineObject(UnitCommand.Attack,
 
 	isCommandDisplayable: function() {
 		var unit = this.getCommandTarget();
-		var arr = OT_getDirectSkillArrayAll(unit, -1, '');
+		var arr = OT_getCommandSkillArrayAll(unit, -1, '');
 		var count = arr.length;
-
+		
 		// Make sure you have a command-type skill
 		for( var i=0 ; i<count ; i++ ) {
-			// Is it command activated?
-			if( OT_isCommandSkill(arr[i].skill) ) {
-				if( !EC_SkillCheck.isSkillCheckEnable(unit, arr[i].skill) ) {
-					continue;
-				}
+			if( arr[i].skill.custom.EC_Command == OT_SkillCommandType.ATTACK ) {
+				if( !AttackChecker.isUnitAttackable(unit) ) continue;
 				
-				if( arr[i].skill.custom.EC_Command == OT_SkillCommandType.ATTACK ) {
-					if( !AttackChecker.isUnitAttackable(unit) ) continue;
-					
-					// Check that you can attack with the relevant weapon
-					if( !EC_SkillCheck.isCommandSkillAttackable(unit, arr[i].skill, arr[i].objecttype) ) continue;
-				} else {
-					if( !EC_SkillCheck.isCommandSkillEnableWeaponCheck(unit, arr[i].skill) ) continue;
-				}
-				return true;
+				// Check that you can attack with the relevant weapon
+				if( !EC_SkillCheck.isCommandSkillAttackable(unit, arr[i].skill, arr[i].objecttype) ) continue;
+			} else {
+				if( !EC_SkillCheck.isSkillCheckEnableALLWeapon(unit, arr[i].skill) ) continue;
+				if( !EC_SkillCheck.isCommandSkillEnableWeaponCheck(unit, arr[i].skill) ) continue;
 			}
+			return true;
 		}
 
 		return false;
 	},
 
 	getCommandName: function() {
-		return 'Command skills';
+		return 'Command Skills';
 	},
 
 	endCommandAction: function() {
@@ -438,6 +461,7 @@ var OT_WeaponAllSelectMenu = defineObject(WeaponSelectMenu,
 		//	this._setWeaponFormation();
 		//	this._setWeaponbar(unit);
 		//}
+		this._initWeaponArray(skill, _selectSkillEntry.objecttype);
 		this._setWeaponSkillFormation(skill, _selectSkillEntry.objecttype);
 		this._setWeaponSkillbar(unit, skill, _selectSkillEntry.objecttype);
 		this._itemListWindow.setActive(true);
@@ -463,50 +487,104 @@ WeaponSelectMenu._setWeaponSkillFormation = function(skill, type) {
 	this._itemListWindow.setItemFormation(count);
 };
 
-// 発動条件に物理or魔法属性や距離を指定している場合
-// また、武器に付属したコマンドスキルを使用しようとした時、
-// 該当スキルが発動できる武器の総数を取得
-WeaponSelectMenu.getWeaponSkillCount = function(skill, type) {
-	var i, j, item;
-	var count = UnitItemControl.getPossessionItemCount(this._unit);
-	var weaponCount = 0;
+// Obtain the weapon that can activate the relevant skill and store it in the array
+WeaponSelectMenu._initWeaponArray = function(skill, type) {
+	this._weaponArray = new Array();
 	
+	var i, j, item;
+	var weaponCount = 0;
+	var tmpHP = this._unit.getHp();
+	var tmpEP = 0;
+	var tmpFP = 0;
+	if(typeof UnitParameter.MEP !== 'undefined') {
+		tmpEP = OT_GetNowEP(this._unit);
+	}
+	if(typeof UnitParameter.MFP !== 'undefined') {
+		tmpFP = OT_GetNowFP(this._unit);
+	}
+	
+	var weapon = ItemControl.getEquippedWeapon(this._unit);
+	
+	var Items = EC_GetEquipableWeapons(this._unit);
+	var count = Items.length
+	
+	var count = Items.length;
 	for (i = 0; i < count; i++) {
-		item = UnitItemControl.getItem(this._unit, i);
+		item = Items[i];
 		if (this._isWeaponAllowed(this._unit, item)) {
+			if(this._unit.getHp() < tmpHP) {
+				this._unit.setHp(tmpHP);
+			}
+			if(typeof UnitParameter.MEP !== 'undefined') {
+				if(OT_GetNowEP(this._unit) < tmpEP) {
+					this._unit.custom.tmpNowEp = tmpEP;
+				}
+			}
+			if(typeof UnitParameter.MFP !== 'undefined') {
+				if(OT_GetNowFP(this._unit) < tmpFP) {
+					this._unit.custom.tmpNowFp = tmpFP;
+				}
+			}
+			ItemControl.setEquippedWeapon(this._unit, item);
 			if(EC_SkillCheck.isCommandSkillAttackableWeapon(this._unit, skill, item, type)) {
-				weaponCount++;
+				this._weaponArray.push(item);
 			}
 		}
+	}
+	
+	if(weapon) {
+		ItemControl.setEquippedWeapon(this._unit, weapon);
+	}
+	
+	// Fixed hp decreased during check process
+	if(this._unit.getHp() < tmpHP) {
+		this._unit.setHp(tmpHP);
+	}
+	if(typeof UnitParameter.MEP !== 'undefined') {
+		if(OT_GetNowEP(this._unit) < tmpEP) {
+			this._unit.custom.tmpNowEp = tmpEP;
+		}
+	}
+	if(typeof UnitParameter.MFP !== 'undefined') {
+		if(OT_GetNowFP(this._unit) < tmpFP) {
+			this._unit.custom.tmpNowFp = tmpFP;
+		}
+	}
+};
+
+
+//If physical or magic attribute or distance is specified as the activation condition
+//Also, when trying to use a command skill attached to a weapon,
+//Get the total number of weapons that can activate the skill
+WeaponSelectMenu.getWeaponSkillCount = function(skill, type) {
+	var i, j, item;
+	var weaponCount = 0;
+	var count = this._weaponArray.length;
+	for (i = 0; i < count; i++) {
+		weaponCount++;
 	}
 	
 	return weaponCount;
 }
 
-// If the activation condition specifies a physical or magical attribute or distance.
-// Also, when you try to use a command skill attached to a weapon.
-// When trying to use a command skill attached to a weapon, insert the weapon into the list so that only weapons that can trigger the skill are shown.
+//If physical or magic attribute or distance is specified as the activation condition
+//Also, when trying to use a command skill attached to a weapon,
+//Insert weapons into the list so that only weapons that can activate the skill are displayed
 WeaponSelectMenu._setWeaponSkillbar = function(unit, skill, type) {
-	var i, j, item;
-	var count = UnitItemControl.getPossessionItemCount(unit);
+	var i;
 	var scrollbar = this._itemListWindow.getItemScrollbar();
-	
 	scrollbar.resetScrollData();
-	
+
+	var count = this._weaponArray.length;
 	for (i = 0; i < count; i++) {
-		item = UnitItemControl.getItem(unit, i);
-		if (this._isWeaponAllowed(unit, item)) {
-			if(EC_SkillCheck.isCommandSkillAttackableWeapon(unit, skill, item, type)) {
-				scrollbar.objectSet(item);
-			}
-		}
+		scrollbar.objectSet(this._weaponArray[i]);
 	}
 	
 	scrollbar.objectSetEnd();
 };
 
-// If a unit is ready to move by re-acting on a check after a unit action
-// If the unit has already used a command skill, it will be removed from use and the number of uses will be counted.
+//Check after unit action to see if the unit is ready to move by re-action.
+//If the command skill has been used, cancel the usage state and count the number of times it has been used
 var alias2 = PlayerTurn._checkAutoTurnEnd;
 PlayerTurn._checkAutoTurnEnd = function() {
 	
@@ -531,8 +609,8 @@ PlayerTurn._checkAutoTurnEnd = function() {
 	return alias2.call(this);
 };
 
-// For offensive command skills, the re-action skill may be triggered, but
-// Wait-type command skills should not trigger the re-action skill if there is no duration turn set.
+//In the case of attack-type command skills, re-action skills may be activated.
+//For standby command skills, if there is no continuous turn setting, re-action skills will not be activated.
 var alias3 = ReactionFlowEntry._completeMemberData;
 ReactionFlowEntry._completeMemberData = function(playerTurn) {
 	var list = DataVariable.Sdb.getList();
@@ -566,35 +644,67 @@ ReactionFlowEntry._completeMemberData = function(playerTurn) {
 	return result;
 };
 
-//In the case of support skills, check the check for activation on command at the skill retention check.
-var alias100 = SkillControl.getSkillObjectArray;
-SkillControl.getSkillObjectArray = function(unit, weapon, skilltype, keyword, objectFlag) {
-	var arr = alias100.call(this, unit, weapon, skilltype, keyword, objectFlag);
-	if(skilltype == SkillType.SUPPORT || skilltype == SkillType.PARAMBONUS) {
-		var i, skill;
-		var count = arr.length;
-		var returnArr = [];
-		for (i = 0; i < count; i++) {
-			skill = arr[i].skill;
-			
-			if(OT_isCommandSkill(skill)) {
-				// If it is a command skill, check that it is activated on command
-				if(!EC_SkillCheck.SkillCheckCommand(unit, skill, false)) {
-					continue
-				}
+//If Kaspara, which prohibits pursuit while activated, is added to the command skill,
+//Correct the number of attacks in the battle prediction
+var CommandNoAttackMode = false;
+var CommandOneAttackMode = false;
+var alias4 = PosAttackWindow.setPosTarget;
+PosAttackWindow.setPosTarget = function(unit, item, targetUnit, targetItem, isSrc) {
+	//May be triggered by command skill
+	var arr = OT_getCommandSkillArrayAll(unit, -1, '');
+	var count = arr.length;
+	
+	//Make sure you have command type skills
+	for( var i=0 ; i<count ; i++ ) {
+		var skill = arr[i].skill;
+		
+		//Command skill activated
+		if(EC_SkillCheck.SkillCheckCommand(unit, skill, false)) {
+			//If you set prohibition on follow-up when activated
+			if(EC_isRoundNoAttack(skill)) {
+				CommandNoAttackMode = true;
 			}
 			
-			// Check the triggering conditions
-			if(!EC_SkillCheck.isSkillCheckEnable(unit, skill, true)) {
-				continue;
+			// If you set prohibition of follow-up (attack once) when activated.
+			if(EC_isRoundOneAttack(skill)) {
+				CommandOneAttackMode = true;
 			}
-			returnArr.push(arr[i]);
 		}
-		return returnArr;
+	}
+
+	alias4.call(this, unit, item, targetUnit, targetItem, isSrc);
+	
+	if(CommandNoAttackMode) {
+		this._statusArray = AttackChecker.getNonStatus();
+		this._roundAttackCount = 0;
 	}
 	
-	return arr;
+	CommandNoAttackMode = false;
+	CommandOneAttackMode = false;
+	//calculateRoundCount: function(active, passive, weapon) {
 };
+
+var alias5 = Calculator.calculateRoundCount;
+Calculator.calculateRoundCount = function(active, passive, weapon) {
+	var cnt = alias5.call(this, active, passive, weapon);
+	
+	if(CommandOneAttackMode) {
+		return 1;
+	}
+	
+	return cnt;
+};
+
+//var alias6 = AttackChecker.getAttackStatusInternal;
+//AttackChecker.getAttackStatusInternal = function(unit, weapon, targetUnit) {
+//	var arr = alias6.call(this, unit, weapon, targetUnit);
+//	
+//	if(CommandNoAttackMode) {
+//		return this.getNonStatus();
+//	}
+//	
+//	return arr;
+//}
 
 })();
 

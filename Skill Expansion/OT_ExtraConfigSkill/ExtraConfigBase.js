@@ -45,6 +45,15 @@
   2020/03/29
   Fixed the ability to set the cool time for non-command skills.
   
+  2023/10/29:
+  For status value referenced by activation rate and status value judgment of activation conditions.
+  Added Custom parameter to set whether to consider parameter bonus value.
+  If not set, the settings on the tool side will be used.
+  Along with this, the points that were previously obtained including parameter bonus values ​​have been changed to
+  Corrected so that when Custom parameter is not set, the status is obtained according to the settings on the tool side.
+  (Corrected the judgment process when setting EC_AddTriggerRate, EC_OverStatus, EC_UnderStatus, EC_NowStatus, EC_OpponentNowStatus)
+  From now on, the update history will not be included in the script header, but will be written in readme.txt.
+
 --------------------------------------------------------------------------*/
 
 (function() {
@@ -177,10 +186,8 @@ EC_PutlogSystem = function(msg)
 OT_isCommandSkill = function(skill) {
 	var value = skill.custom.EC_Command;
 	
-	if( value != null )
-	{
-		switch(value)
-		{
+	if( value != null ) {
+		switch(value) {
 			case OT_SkillCommandType.ATTACK:
 			case OT_SkillCommandType.WAIT:
 				return true;
@@ -190,7 +197,119 @@ OT_isCommandSkill = function(skill) {
 	return false;
 };
 
-// Check that the value is within the range
+//Do you want to prohibit follow-up attacks when the skill is activated?
+EC_isRoundNoAttack = function(skill) {
+	var value = skill.custom.EC_RoundNoAttack;
+	
+	if( typeof value !== 'boolean' ) {
+		value = false;
+	}
+	
+	return value;
+}
+
+// Is follow-up attack prohibited when skill is activated (attack at least once)?
+EC_isRoundOneAttack = function(skill) {
+	var value = skill.custom.EC_RoundOneAttack;
+	
+	if( typeof value !== 'boolean' ) {
+		value = false;
+	}
+	
+	return value;
+}
+
+
+// Returns an array of equippable weapons
+EC_GetEquipableWeapons = function(unit) {
+	var Items = new Array();
+	var count = UnitItemControl.getPossessionItemCount(unit);
+	for (var i = 0; i < count; i++) {
+		var item = UnitItemControl.getItem(unit, i);
+		if (item !== null && ItemControl.isWeaponAvailable(unit, item)) {
+			Items.push(item);
+		}
+	}
+	
+	return Items;
+}
+
+//Consider parameter bonus for activation rate status check or if it is set in Caspara
+//Obtain the value that takes into account the parameter bonus or the value that does not take into account the parameter bonus depending on the Kaspara setting value.
+//If not set, go to data settings → config
+//Obtain the unit's parameters according to the setting of "Consider parameter bonuses in skill activation conditions"
+EC_GetParamBonusPercent = function(unit, type, skill) {
+	var strType = '';
+	if(typeof type === 'number') {
+		for( var key in ParamType ) {
+			if(ParamType[key] == type) {
+				strType = key;
+			}
+		}
+	} else {
+		strType = type;
+	}
+	
+	var isEnable = skill.custom.EC_ParamBonusCheck;
+	if(typeof isEnable === 'undefined') {
+		isEnable = DataConfig.isSkillInvocationBonusEnabled();
+	}
+	
+	return EC_GetParamBonusDone(unit, strType, isEnable);
+}
+
+//Consider the parameter bonus for status check of additional activation condition or if it is set in Caspara
+//Obtain the value that takes into account the parameter bonus or the value that does not take into account the parameter bonus depending on the Kaspara setting value.
+//If not set, go to data settings → config
+//Obtain the unit's parameters according to the setting of "Consider parameter bonuses in skill activation conditions"
+EC_GetStatusCheckParamBonus = function(unit, type, skill) {
+	var isEnable = skill.custom.EC_StatusChkParamBonus;
+	if(typeof isEnable === 'undefined') {
+		isEnable = DataConfig.isSkillInvocationBonusEnabled();
+	}
+	
+	return EC_GetParamBonusDone(unit, type, isEnable);
+};
+
+EC_GetParamBonusDone = function(unit, type, isEnable) {
+	var val = 0;
+	switch(type) {
+		case 'HP':
+			if (isEnable) {
+				val = ParamBonus.getMhp(unit);
+			} else {
+				val = unit.getParamValue(UnitParameter.MHP.getParameterType());
+			}
+			break;
+
+		case 'EP':
+			if (isEnable) {
+				val = ParamBonus.getEp(unit);
+			} else {
+				val = unit.getParamValue(UnitParameter.MEP.getParameterType());
+			}
+			break;
+
+		case 'FP':
+			if (isEnable) {
+				val = ParamBonus.getFp(unit);
+			} else {
+				val = unit.getParamValue(UnitParameter.MFP.getParameterType());
+			}
+			break;
+
+		default:
+			if (isEnable) {
+				val = ParamBonus.getBonus(unit, ParamType[type]);
+			} else {
+				val = unit.getParamValue(ParamType[type]);
+			}
+	}
+	return val;
+};
+
+
+//Check that the value is within the range
 EC_isValueInRange = function(nowValue, maxValue, range)
 {
 	if( range == null )
@@ -237,7 +356,7 @@ EC_EnableManager = {
 		var msg = '';
 		var isSrc = active.custom.tmpNowVirtualAttack.isSrc;
 		
-		//---Determine if the skill can be activated by the state of the activator---------------------------------------
+		//Determine whether the skill can be activated based on the state of the user
 /*
 		var nowHP          = active.custom.tmpNowVirtualAttack.hp;
 		var Mhp            = ParamBonus.getMhp(active);
@@ -248,8 +367,8 @@ EC_EnableManager = {
 		var direction = PosChecker.getSideDirection(active.getMapX(), active.getMapY(), passive.getMapX(), passive.getMapY());
 		var isDirectAttack = direction !== DirectionType.NULL;
 		
-		// Can be triggered if the current HP is within the set range
-		// Use EC_NowStatus as it may become obsolete.
+		// Can be activated if current HP is within the set range
+		// Please use ec now status as it may be deprecated someday.
 		if( skill.custom.EC_NowHP != null )
 		{
 			var str = skill.custom.EC_NowHP;
@@ -260,25 +379,25 @@ EC_EnableManager = {
 			}
 		}
 
-		// Can be triggered if the opponent's current HP is within the set range.
-		// Use EC_OpponentNowStatus as it may be obsolete.
+		// Can be activated if the opponent's current HP is within the set range
+		// Please use ec opponent now status as it may be abolished someday.
 		if( skill.custom.EC_OpponentNowHP != null )
 		{
 			var str = skill.custom.EC_OpponentNowHP;
 			
-			if( !EC_StatusCheck.isValueInRange(skill, passive_nowHP, passive_Mhp, str, '相手HP') )
+			if( !EC_StatusCheck.isValueInRange(skill, passive_nowHP, passive_Mhp, str, 'Opponent HP') )
 			{
 				return false;
 			}
 		}
 
-		// Triggered by proximity or indirectness
-		// Use EC_Range as it may eventually be obsolete
+		// Activation determined by melee or indirect
+		// Please use ec range as it may be deprecated someday.
 		if( skill.custom.EC_isDirectAttack != null )
 		{
 			if( skill.custom.EC_isDirectAttack )
 			{
-				EC_Putlog('近接攻撃で発動', skill);
+				EC_Putlog('Triggered by melee attack', skill);
 			}
 			else
 			{
@@ -391,23 +510,17 @@ EC_StatusCheck = {
 		var result = EC_DefineSetting.UNDEFINED;
 		var msg = 'Status range check';
 
-		if( opponent )
-		{
+		if( opponent ) {
 			now = obj.custom.EC_OpponentNowStatus;
-			msg = 'The other party' + msg;
-		}
-		else
-		{
+			msg = 'opponent' + msg;
+		} else {
 			now = obj.custom.EC_NowStatus;
 		}
 
-		if( now != null && unit != null )
-		{
+		if( now != null && unit != null ) {
 			EC_Putlog(msg, obj);
-			for( var key in now )
-			{
-				if( !this.isParamInRange(unit, obj, key, now[key]) )
-				{
+			for( var key in now ) {
+				if( !this.isParamInRange(unit, obj, key, now[key]) ) {
 					return false;
 				}
 			}
@@ -419,9 +532,8 @@ EC_StatusCheck = {
 	
 	// Check that parameters are within range
 	isParamInRange: function(unit, obj, type, strRange) {
-		// Check that the parameters are declared
-		if(!this.isDefineParam(type))
-		{
+		// Check that parameters are declared
+		if(!this.isDefineParam(type)) {
 			root.log(type + 'は未宣言のパラメータです。');
 			return 0;
 		}
@@ -443,27 +555,29 @@ EC_StatusCheck = {
 					now = unit.custom.tmpNowVirtualAttack.hp;
 				}
 
-				max = ParamBonus.getMhp(unit);
+				max = EC_GetStatusCheckParamBonus(unit, type, obj);
 				break;
 
 			case EC_DefineStatus.EP:
+				if(typeof unit.custom.tmpUseEP == 'undefined') unit.custom.tmpUseEP = 0;
 				now = OT_GetNowEP(unit) - unit.custom.tmpUseEP;
-				max = ParamBonus.getEp(unit);
+				max = EC_GetStatusCheckParamBonus(unit, type, obj);
 				break;
 
 			case EC_DefineStatus.FP:
+				if(typeof unit.custom.tmpUseFP == 'undefined') unit.custom.tmpUseFP = 0;
 				now = OT_GetNowFP(unit) - unit.custom.tmpUseFP;
-				max = ParamBonus.getFp(unit);
+				max = EC_GetStatusCheckParamBonus(unit, type, obj);
 				break;
 
-			// For all other parameters, the maximum value is the growth limit.
+			// For other parameters, the maximum value is the growth limit value.
 			case EC_DefineStatus.LV:
 				now = unit.getLv();
 				max = Miscellaneous.getMaxLv(unit);
 				break;
 
 			default:
-				now = ParamBonus.getBonus(unit, ParamType[type]);
+				now = EC_GetStatusCheckParamBonus(unit, type, obj);
 				max = UnitParameter[type].getMaxValue(unit);
 				paramName = UnitParameter[type].getParameterName();
 
@@ -638,19 +752,18 @@ EC_StatusCheck = {
 			strTmp = EC_SituationRenderer.getParamName( key );
 			if(strTmp != '') msg += strTmp + ':' + value + ' ';
 
-			if( this.CheckStatusDiff(active, passive, key, -value) < 0 )
-			{
+			var val = this.CheckStatusDiff(active, passive, key, -value, obj);
+			//EC_Putlog('status difference:' + val, obj)
+			if( val < 0 ) {
 				isFalse = true;
-			}
-			else
-			{
+			} else {
 				isTrue  = true;
 			}
 		}
 
 		if(msg != '')
 		{
-			EC_Putlog('Activate if the following are greater than the specified value', obj)
+			EC_Putlog('Activates if the following is greater than the specified value than the opponent', obj)
 			EC_Putlog(msg, obj);
 		}
 		
@@ -683,19 +796,18 @@ EC_StatusCheck = {
 			strTmp = EC_SituationRenderer.getParamName( key );
 			if(strTmp != '') msg += strTmp + ':' + value + ' ';
 			
-			if( this.CheckStatusDiff(active, passive, key, value) > 0 )
-			{
+			var val = this.CheckStatusDiff(active, passive, key, value, obj);
+			//EC_Putlog('status difference:' + val, obj)
+			if( val > 0 ) {
 				isFalse = true;
-			}
-			else
-			{
+			} else {
 				isTrue  = true;
 			}
 		}
 
 		if(msg != '')
 		{
-			EC_Putlog('Activate if the following is less than the specified value', obj)
+			EC_Putlog('Activates if the following is less than the specified value than the opponent', obj)
 			EC_Putlog(msg, obj);
 		}
 		
@@ -706,13 +818,13 @@ EC_StatusCheck = {
 		return EC_DefineSetting.UNDEFINED;
 	},
 
-	// Check the status difference between you and your opponent
-	CheckStatusDiff: function(active, passive, type, value) {
+	// Check the status difference with your opponent
+	CheckStatusDiff: function(active, passive, type, value, skill) {
 		var diffValue = 0;
 		var acValue = 0;
 		var psValue = 0;
 		
-		// Check that the parameters are declared
+		// Check that parameters are declared
 		if(!this.isDefineParam(type))
 		{
 			return 0;
@@ -753,8 +865,8 @@ EC_StatusCheck = {
 				break;
 
 			default:
-				acValue = ParamBonus.getBonus(active,  ParamType[type]);
-				psValue = ParamBonus.getBonus(passive, ParamType[type]);
+				acValue = EC_GetStatusCheckParamBonus(active, type, skill);
+				psValue = EC_GetStatusCheckParamBonus(passive, type, skill);
 				diffValue = acValue + value - psValue;
 				
 				break;
@@ -765,7 +877,7 @@ EC_StatusCheck = {
 };
 
 EC_SituationCheck = {
-	// Check whether it can be triggered by the first move or not.
+	// Check whether it can be activated depending on whether it is the first move or not.
 	isEnableSrc: function(obj, isSrc) {
 		if( obj == null ) return false;
 		if( obj.custom.EC_isSrc == null ) return EC_DefineSetting.UNDEFINED;
@@ -775,20 +887,20 @@ EC_SituationCheck = {
 
 		if(obj.custom.EC_isSrc == true)
 		{
-			EC_Putlog('Triggered by first attack', obj);
+			EC_Putlog('Activated on first attack', obj);
 		}
 		else
 		{
-			EC_Putlog('Triggered by rear attack', obj);
+			EC_Putlog('Activated on second attack', obj);
 		}
 
 		if(isSrc == true)
 		{
-			EC_Putlog('Activator: first attack', obj);
+			EC_Putlog('Actor: First attack', obj);
 		}
 		else
 		{
-			EC_Putlog('Activator:Rear attack', obj);
+			EC_Putlog('Actor: second attack', obj);
 		}
 				
 		if(isSrc != obj.custom.EC_isSrc)
@@ -799,7 +911,7 @@ EC_SituationCheck = {
 		return true;
 	},
 	
-	// Check if it can be activated in a number of turns
+	// Check if it can be activated in the number of turns
 	isEnableTurn: function(obj) {
 		if( obj == null ) {
 			return false;
@@ -836,7 +948,7 @@ EC_SituationCheck = {
 		var msg = '';
 		var result = EC_DefineSetting.UNDEFINED;
 
-		// Can be activated from the specified turn 
+		// Can be activated from the specified turn
 		if( obj.custom.EC_StartTurn != null )
 		{
 			msg = 'The number of turns' + obj.custom.EC_StartTurn + 'Can be activated with the above:' + 'Current' + turn + 'Turn ';
@@ -1066,7 +1178,7 @@ EC_SituationCheck = {
 		else
 		{
 			EC_Putlog(msg + 'is in fusion', obj);
-			// True if you have to have some kind of fusion.
+			//True if there is some kind of fusion
 			if( id == EC_DefineSetting.ALL )
 			{
 				EC_Putlog(msg + 'is activated by fusion', obj);
@@ -1436,7 +1548,7 @@ EC_SituationRenderer = {
 			{
 				var min = parseInt(RegExp.$1);
 				var max = parseInt(RegExp.$2);
-				msg = 'Activation rate Lower limit:' + min + '％ Upper limit :' + max + '％';
+				msg = 'Activation rate Lower limit:' + min + '% Upper limit :' + max + '%';
 			}
 		}
 
@@ -1558,17 +1670,17 @@ EC_SituationRenderer = {
 			} 
 			else if( strat != null )
 			{
-				// Can be activated from the specified turn 
+				// Can be activated from the specified turn
 				msg +=  'More than ' + strat ;
 			}
 			else if( end != null )
 			{
-				// Can be activated until the specified turn 
+				// Can be activated until the specified turn
 				msg +=  'Less than ' + end;
 			}
 		}
 
-		// Can be activated if the turn is a specific multiple 
+		// Can be activated if the turn is a specific multiple
 		if( times != null )
 		{
 			msg += 'Multiple of ' + times;
@@ -1577,7 +1689,7 @@ EC_SituationRenderer = {
 		return msg;
 	},
 	
-	// Message of first attack and second attack setting 
+	// Message of first attack and second attack setting
 	getSrcMessage: function(obj) {
 		var msg = '';
 
@@ -1596,7 +1708,7 @@ EC_SituationRenderer = {
 		return msg;
 	},
 
-	// Attack count setting message 
+	// Attack count setting message
 	getAttackCountMessage: function(obj, opponent) {
 		var add = '';
 		var msg = '';
@@ -1635,7 +1747,7 @@ EC_SituationRenderer = {
 		return msg;
 	},
 	
-	// Message of activation setting at the distance from the other party 
+	// 相手との距離での発動設定のメッセージ
 	getRangeMessage: function(obj) {
 		var add = '';
 		var msg = '';
@@ -1672,7 +1784,7 @@ EC_SituationRenderer = {
 		return msg;
 	},
 
-	// Fusion setting message 
+	// Fusion setting message
 	getFusionMessage: function(obj, opponent) {
 		var add = '';
 		var msg = '';
@@ -1703,7 +1815,7 @@ EC_SituationRenderer = {
 		return msg;
 	},
 
-	// Get fusion name 
+	// Get fusion name
 	getFusionName: function( id )
 	{
 		//var list = root.getMetaSession().getDifficulty().getFusionReferenceList();
@@ -1972,8 +2084,31 @@ EC_SituationRenderer = {
 		
 		return returnMsg;
 	},
+	
+	// Creating a message when multiple parameters are specified
+	getArrayParamMessageOU: function(obj) {
+		var num = 0;
 
-	// Create a message when multiple parameters are specified
+		for( var key in obj ) {
+			num++;
+		}
+
+		var aryMsg = [];
+		var strTmp = '';
+		var returnMsg = [];
+		
+		for( var key in obj ) {
+			strTmp = this.getParamName( key );
+			
+			if(strTmp != '') {
+				aryMsg.push( strTmp + EC_DefineString.OverUnderStatus2 + obj[key] );
+			}
+		}
+
+		return aryMsg;
+	},
+
+	// Creating a message when multiple parameters are specified
 	getArrayAddTriggerRateMessage: function(obj, length) {
 		var num = 0;
 
@@ -2049,7 +2184,11 @@ EC_SituationRenderer = {
 		var msg = EC_DefineString.CommandDuration;
 		
 		if( typeof obj != 'undefined' ) {
-			msg += obj + EC_DefineString.CommandDurationTime;
+			if(obj == 0) {
+				msg += EC_DefineString.CommandDurationBattle;
+			} else {
+				msg += obj + EC_DefineString.CommandDurationTime;
+			}
 		} else {
 			msg += EC_DefineString.CommandDurationNon;
 		}
