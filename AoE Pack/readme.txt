@@ -124,6 +124,24 @@
   Even if the effect finishes playing, it will not proceed to the next process unless the skip key is pressed to skip.
   Modified processing to play back with DynamicAnime because there was a possibility of malfunction
 
+    2023/07/03:
+  Fixed the algorithm after determining the user's position when activated. Corrected so that it does not activate in areas where there are clearly no enemies.
+  (The original algorithm is quite complex, so it may not be completely repaired.)
+  
+  If there is a setting for the "weapons that cannot be used after moving" plugin by Mr. Unnamed (tentative),
+  Fixed enemies to perform area attacks without moving from the spot.
+  
+  It is now possible to set death permission for the target so that ranged attacks do not inflict the final blow.
+  Setting OT_TargetDamageDeath to false will prevent finishing attacks from area attacks.
+
+  If the enemy AI has been given a state of going berserk (a state of aggressively attacking allies),
+  Corrected so that the area attack will be performed in the area where it can be most involved in the area attack, regardless of enemy or ally relationship.
+  
+  Fixed a bug where experience points were displayed when the caster died due to recoil damage when using a range attack.
+  
+  If you have set an indiscriminate attack and also set recoil damage,
+  Fixed an issue where when you were the target of an area attack and successfully evaded it, the recoil damage value was not displayed and the message “Miss” was displayed.
+
 -----------------------------------------------------------------------------------------
 [Introduction method]
 Put "OT_ExtraItem" in the Plugin folder.
@@ -205,6 +223,19 @@ IER_DelGoodAnime : [(anime ID), (runtime use)] 							// Set the animation when 
 IER_DelBadAnime : [(anime ID), (runtime use)] 							// Set the animation when the target bad state is released {(anime ID) is a number, (runtime use) is set to false or true (not When specified: [101, true])}
 IER_SoundDuplicate: (whether or not sound is duplicated) 				// If set to false, the sound effect will not be duplicated when the effect occurs when hit, state is granted, or released (when not specified: false, change the default value with EffectRangeItemDefault.js Possible)
 
+
+//When using a range attack, if there is both damage and recoil damage when it hits you, 
+//the damage will be applied in the order of damage that allows death → damage that does not allow death.
+//effectrangeitemdefault.js ot_effectrangeitemdamagedeathcaltype 
+//You can set whether to apply damage that is allowed for death first or later.
+
+OT_TargetDamageDeath   : (Is death possible?)                      // Set whether the attack target will die from range attack damage. If false, 1 hp will remain (if not specified: true)
+                                                            If you are set to indiscriminate attack and you are likely to die from the damage when it hits you, you will remain with 1 HP.
+                                                            
+OT_UseDamageDeath      : (Is death possible?)                      // Set whether the user dies due to recoil damage in OT_UseDamage or OT_AbsorptionRate.
+                                                            True allows death, false allows 1 HP to remain (unspecified: true)
+                                                            *If you set it to indiscriminate attack, the damage you receive when it hits you will not be treated as recoil damage, so you will die.
+
 // For the setting of support reflection below
 // Effective when power and hit rate depend on unit ability.
 
@@ -212,9 +243,6 @@ IER_SupportAtk : (reflect support {attack correction}) 					// If set to true, a
 IER_SupportHit : (reflect support {hit correction}) 					// If set to true, the hit correction by the support effect will be reflected in the hit rate (when not specified: true, default value can be changed with EffectRangeItemDefault.js)
 IER_SupportDef : (reflect support {defense correction}) 				// If set to true, the defense correction from the support effect will be reflected in the damage value given to the opponent (when not specified: true, default value can be changed with EffectRangeItemDefault.js)
 IER_SupportAgi : (reflect support {avoidance correction}) 				// When set to true, the avoidance correction due to the support effect will be reflected in the opponent's evasion value (when not specified: true, default value can be changed with EffectRangeItemDefault.js)
-
-OT_UseDamageDeath : (whether to die) 									// Sets whether damage to the user with OT_UseDamage or OT_AbsorptionRate dies.
-																			True allows death, false leaves 1 HP (unspecified: true)
 
 IER_MapChipChangeAfter : [ (Setting method is described later) ] 		// Change a specific map chip within the range to the specified chip (default: null)
 
@@ -344,20 +372,20 @@ The unit's skill x 3 is not added to the hit rate set by IER_HitValue
 
 ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
 ■IER_HitReflectionWeapon
-命中値に武器の命中値を加算するか設定します
-(未設定：false) ※EffectRangeItemDefault.jsでデフォルト値を変更可能
+Set whether to add the weapon's hit value to the hit value.
+(Not set: false) *Default value can be changed with EffectRangeItemDefault.js
 
-これをtrueにする場合はIER_HitValueは低めに設定する事をおすすめします。
+If you set this to true, we recommend setting the ier hit value to a low value.
 
-例：
+example:
   IER_HitValue:10
 , IER_HitReflectionWeapon:true
-IER_HitValueで設定した命中率に武器命中率が加算されます
+Weapon hit rate is added to the hit rate set by IER_HitValue
 
-例2：
+Example 2:
   IER_HitValue:80
 , IER_HitReflectionWeapon:false
-IER_HitValueで設定した命中率に武器命中率が加算されません
+Weapon hit rate is not added to the hit rate set by IER_HitValue
 
 ーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーーー
 ■IER_HitAvoid

@@ -119,6 +119,8 @@ Modified to do the same processing as BaseCombinationCollector._getTargetListArr
   Even if the effect finishes playing, it will not proceed to the next process unless the skip key is pressed to skip.
   Modified processing to play back with DynamicAnime because there was a possibility of malfunction
 
+  2023/07/03:
+  Described in Readme.txt. From now on, the update history will no longer be included in the script header.
 -----------------------------------------------------------------------------------------------*/
 
 (function() {
@@ -184,16 +186,29 @@ var alias6 = ItemExpFlowEntry._getItemExperience;
 ItemExpFlowEntry._getItemExperience = function(itemUseParent) {
 	var exp = alias6.call(this, itemUseParent);
 
-	if( itemUseParent.OT_SetExp != null )
-	{
-		exp += itemUseParent.OT_SetExp;
-	}
+	var itemTargetInfo = itemUseParent.getItemTargetInfo();
+	var item = itemTargetInfo.item;
+	if(item.getCustomKeyword() === OT_ItemEffectRange_getCustomKeyword()) {
+		//root.log('Keyword:' + item.getCustomKeyword());
+		
+		// If the caster dies, the experience points will be set to 0.
+		var unit = itemTargetInfo.unit;
+		//root.log('Name:' + unit.getName());
+		if(unit.getAliveState() != AliveType.ALIVE) {
+			//root.log('Invoker dies:' + unit.getName());
+			return 0;
+		}
+
+		if( itemUseParent.OT_SetExp != null ) {
+			exp += itemUseParent.OT_SetExp;
+		}
 	
-	if (exp > 100) {
-		exp = 100;
-	}
-	else if (exp < 0) {
+		if (exp > 100) {
+			exp = 100;
+		} else if (exp < 0) {
 		exp = 0;
+		}
+		//root.log('exp:' + exp);
 	}
 
 	return exp;
@@ -580,6 +595,9 @@ var OT_ItemEffectRangeUse = defineObject(BaseItemUse,
 			var soundArray = [];
 			var soundIdArray = [];
 			
+			//Recoil damage after use
+			var useDamage = OT_getCustomItemUseDamage(item, unit);
+
 			// Animation execution preparation
 			var x, y, pos, i;
 			
@@ -654,6 +672,12 @@ var OT_ItemEffectRangeUse = defineObject(BaseItemUse,
 							
 							pushData[1] = true;
 						}
+
+						//Miss will not be displayed if there is recoil damage
+						if( unit === targetUnit && useDamage > 0) {
+							root.log('No evasion display due to recoil damage');
+							continue;
+						}
 						this._AvoidUnit.push(pushData);
 						continue;
 					}
@@ -665,7 +689,10 @@ var OT_ItemEffectRangeUse = defineObject(BaseItemUse,
 			
 			var hitLength = this._HitUnit.length;
 			var avoidLength = this._AvoidUnit.length;
-			var useDamage = 0;
+			var selfDamage = 0;
+
+			//For displaying 0 damage to yourself
+			var selfDamagePopup = false;
 
 			// Embed the processing of hit characters and evaded characters
 			for ( i = 0; i < hitLength; i++ ) {
@@ -676,14 +703,13 @@ var OT_ItemEffectRangeUse = defineObject(BaseItemUse,
 
 				if(!noDamage)
 				{
-					if(isRecovery)
-					{
+					if(isRecovery) {
 						// unit recovery
 						var anime = root.queryAnime('easyrecovery');
 						damagePoint = Calculator.calculateRecoveryValue(targetUnit, damage, RecoveryType.SPECIFY, 0) * -1;
 						
 						if( unit === targetUnit ) {
-							useDamage = damagePoint;
+							selfDamage = damagePoint;
 						} else {
 							// sound effect playback
 							var soundHandle = root.querySoundHandle('gaugechange');
@@ -693,23 +719,18 @@ var OT_ItemEffectRangeUse = defineObject(BaseItemUse,
 							this._HitDamage.push( {unit:targetUnit, value:damagePoint, x:x, y:y} );
 						}
 						totalPoint += damagePoint;
-					}
-					else
-					{
+					} else {
 						// Get damage value
 						//damagePoint = Calculator.calculateDamageValue(targetUnit, damage, damageType, 0);
 						damagePoint = OT_getCalculateDamageValue(item, targetUnit, damage, damageType, 0);
 						
-						if( unit === targetUnit )
-						{
-							useDamage = damagePoint;
-						}
-						else
-						{
+						if( unit === targetUnit ) {
+							selfDamage = damagePoint;
+							selfDamagePopup = true;
+						} else {
 							var anime = OT_getCustomItemHitAnimeData(item);
 							
-							if(anime == null)
-							{
+							if(anime == null) {
 								// sound effect playback
 								var soundHandle = root.querySoundHandle('damage');
 								this._soundStock(soundHandle);
@@ -744,14 +765,79 @@ var OT_ItemEffectRangeUse = defineObject(BaseItemUse,
 			
 			this._itemUseParent.OT_SetExp += OT_getCustomItemGetEXP(item);
 
-			// If the user is involved, temporarily save the damage amount
-			var userPoint = useDamage;
-
-			// Add recoil damage after use
-			useDamage += OT_getCustomItemUseDamage(item, unit);
+			//Damage to self
+			// Recoil damage + damage when you get involved + total amount of recovery from damage absorption
+			//
+			// If the damage absorption setting is set to negative, it will be counted as recoil damage.
+			// If set to plus, it will be included in the recovery amount due to damage absorption.
 			
-			// absorb damage
-			useDamage -= OT_getAbsorptionRateValue(item, totalPoint);
+			// damage absorbed
+			var absorptionPoint = OT_getAbsorptionRateValue(item, totalPoint);
+			
+			// If you set it so that you receive damage equal to the damage dealt.
+			// Recorded as recoil damage
+			if(absorptionPoint < 0) {
+				useDamage += (absorptionPoint * -1);
+			}
+			
+			//root.log('Recoil damage:' + useDamage);
+			//root.log('Self-destruction damage:' + selfDamage);
+			
+			// When there is no death permission from recoil damage & no death permission for the attack target
+			// Recoil damage and damage when you get involved
+			// Adjusted so that the damage does not exceed HP
+			if( !OT_getTargetDamageDeath(item) && !OT_getUseDamageDeath(item) ) {
+				useDamage += selfDamage;
+				var hp = unit.getHp() - useDamage;
+				if (hp <= 0) {
+					useDamage = unit.getHp() - 1;
+				}
+				//root.log('After damage correction:' + useDamage);
+			} else {
+				// Order of application of damage not allowed for death
+				if(OT_EffectRangeItemDamageDeathCalType == 0) {
+					// Applies in the order of death-disallowed damage → death-allowed damage.
+					
+					// With area attacks where death from recoil damage is not allowed.
+					// If you are likely to receive more damage than HP, recoil damage will be corrected to 1 HP.
+					if( !OT_getUseDamageDeath(item) ) {
+						var hp = unit.getHp() - useDamage;
+						if (hp <= 0) {
+							useDamage = unit.getHp() - 1;
+						}
+					} 
+				} else {
+					// Applies in the order of death allowed damage → death not allowed damage.
+					if( !OT_getUseDamageDeath(item) ) {
+						var hp = unit.getHp() - selfDamage;
+						//root.log('HP after self-destruction damage:' + hp);
+						
+						if(hp <= useDamage) {
+							useDamage = hp - 1;
+							useDamage = Math.max(0, useDamage);
+						}
+					} else if( !OT_getTargetDamageDeath(item) ) {
+						var hp = unit.getHp() - useDamage;
+						//root.log('HP after recoil damage:' + hp);
+						
+						if(hp <= selfDamage) {
+							selfDamage = hp - 1;
+							selfDamage = Math.max(0, selfDamage);
+						}
+					}
+				}
+				//root.log('After correcting recoil damage:' + useDamage);
+				//root.log('After self-destruction damage correction:' + selfDamage);
+				
+				// If the user is involved, it will be accounted for.
+				useDamage += selfDamage;
+			}
+
+			// If the damage absorption setting is positive, it will be recorded after damage is corrected.
+			if(absorptionPoint > 0) {
+				useDamage -= absorptionPoint;
+			}
+
 			//root.log(userPoint);
 			//root.log(useDamage);
 
@@ -778,15 +864,6 @@ var OT_ItemEffectRangeUse = defineObject(BaseItemUse,
 				dynamicAnime.startDynamicAnime(anime, pos.x, pos.y);
 				this._dynamicAnime.push(dynamicAnime);
 
-				if( OT_getUseDamageDeath(item) == false )
-				{
-					var hp = unit.getHp() - useDamage;
-					if (hp <= 0) {
-						useDamage = unit.getHp() - 1;
-						useDamage += userPoint; // Receive the amount of damage caused by yourself
-					}
-				}
-
 				this._HitDamage.push( {unit:unit, value:useDamage, x:x, y:y} );
 			} else if( useDamage < 0 ) {
 				// Get position of unit
@@ -805,12 +882,9 @@ var OT_ItemEffectRangeUse = defineObject(BaseItemUse,
 				this._HitDamage.push( {unit:unit, value:useDamage, x:x, y:y} );
 			}
 
-			if( this._HitDamage.length == 0 && avoidLength == 0 )
-			{
+			if( this._HitDamage.length == 0 && avoidLength == 0 ) {
 				this.changeCycleMode(OT_ItemEffectRangeUseMode.STATEENTRY);
-			}
-			else
-			{
+			} else {
 				this.changeCycleMode(OT_ItemEffectRangeUseMode.DAMAGE);
 			}
 			
@@ -2554,9 +2628,6 @@ CombinationCollector.Item.OT_setEffectRangeCombination = function(misc) {
 	var numEndRange = endRange + endEffectRange;
 	var count = 0;
 
-	var simulator = root.getCurrentSession().createMapSimulator();
-	simulator.startSimulation(unit, moveCount);
-	
 	// Stores the location where the enemy can move, the required movement power to get there, and the distance in an array
 	// In addition, record the maximum amount of movement power consumed and the number of squares that can be moved the most.
 	var myX = unit.getMapX();
@@ -2574,8 +2645,23 @@ CombinationCollector.Item.OT_setEffectRangeCombination = function(misc) {
 	// Unable to move due to the presence of a unit on your own side cannot be detected.
 	// Use this._createCostArray to search for locations that cannot be moved and store them in an array
 	misc.targetUnit = null;
+
+	//When setting Custom Parameter for a weapon plugin that cannot be used after moving
+	//Simulate the movement force as 0
+	//misc.simulator should not be changed as it is used with other weapons and items
+	//Use a dummy simulator to simulate movable positions
+	if(item.custom.isNoMoveItem == 1) {
+		//root.log('Weapon processing that cannot be used after moving:' + item.getName());
+		var simulator = root.getCurrentSession().createMapSimulator();
+		simulator.startSimulation(unit, 0);
+		misc.indexArray = simulator.getSimulationIndexArray();
+	} else {
+		// Normally, it passes the simulated results of the unit's misc.simulator.
 	misc.indexArray = misc.simulator.getSimulationIndexArray();
+	}
+
 	misc.costArray = this._createCostArray(misc);
+	//root.log('misc.costArray:' + misc.costArray.length);
 
 	//root.log('Move possible position confirmation:' + misc.costArray.length);
 	for(i=0 ; i<misc.costArray.length ; i++) {
@@ -2601,8 +2687,8 @@ CombinationCollector.Item.OT_setEffectRangeCombination = function(misc) {
 	
 	var predictedRangeArray = [];	// Expected range
 	var entryUnitArray = [];		// Unit information that is likely to reach the predicted range
-	var unitScoreArray = [];		// ユニットごとのスコア情報
-	var unitIndexScoreArray = [];	// ユニットの位置をキーとしてスコアを格納
+	var unitScoreArray = [];		// Score information for each unit
+	var unitIndexScoreArray = [];	// Store score using unit position as key
 	var score = 0;
 	//var score = this._checkTargetScore(unit, targetUnit);
 
@@ -2985,11 +3071,12 @@ CombinationCollector.Item.OT_setEffectRangeCombination = function(misc) {
 						tmpX = CurrentMap.getX(targetIndex);
 						tmpY = CurrentMap.getY(targetIndex);
 						
+						var indifferenceArray = OT_EffectRangeIndexArray.getEffectRangeItemIndexArrayPosInfo(tmpX, tmpY, item, x, y);
+
 						// If you were also a target
 						isInvolved = false;
 						if(OT_EffectRangeCheckFilter(unit, filter)) {
 							//root.log('You may also be a target:' + index + ':' + targetIndex);
-							var indifferenceArray = OT_EffectRangeIndexArray.getEffectRangeItemIndexArrayPosInfo(tmpX, tmpY, item, x, y);
 							var chk = ArrayOverlap([index], indifferenceArray);
 							if(chk.length > 0) {
 								tmpScore += myScore;
@@ -3017,6 +3104,36 @@ CombinationCollector.Item.OT_setEffectRangeCombination = function(misc) {
 						// Make sure that the unit can move to a place where it can be activated at the activation position.
 						// If you do not check this and include it in the action pattern, you may shoot from outside the range.
 						if (misc.costArray.length !== 0) {
+
+							//As a final check, check if there is a target person when it is actually activated
+							//If you don't check this, there is a risk of releasing it to a place where there are no enemies.
+							var filter2 = OT_EffectRangeAIScoreCalculation.getUnitFilter(unit, item);
+							
+							//root.log('Confirm the range of possible movement positions:' + indifferenceArray.length);
+							var hitCount = 0;
+							for (k = 0 ; k < indifferenceArray.length ; k++) {
+								var dIndex = indifferenceArray[k];
+								var dX = CurrentMap.getX(dIndex);
+								var dY = CurrentMap.getY(dIndex);
+								//root.log('Range index:' + dIndex);
+								
+								var dUnit = PosChecker.getUnitFromPos(dX, dY);
+								if(dUnit !== null) {
+									//root.log('Check scope for:' + dUnit.getName());
+									if( OT_EffectRangeAIScoreCalculation._checkFilter(dUnit, filter2) ) {
+										//root.log('Confirm enemy:' + dUnit.getName());
+										hitCount += 1;
+									} else {
+										hitCount -= 1;
+										//root.log('Excluded because of allies:' + dUnit.getName());
+									}
+								}
+							}
+							
+							if(hitCount <= 0) {
+								continue;
+							}
+
 							combination = this._createAndPushCombination(misc);
 							combination.targetPos = createPos(tmpX, tmpY); // Item use position
 							combination.single = false;
@@ -3060,7 +3177,15 @@ CombinationCollector.Item.OT_setEffectRangeCombination = function(misc) {
 			//root.log(unit.getName());
 			//create a combination
 			combination = this._createAndPushCombination(misc);
-			combination.targetUnit = unit;
+
+			//If you have set Custom Parameter for a weapon plugin that cannot be used after moving, use it on the spot.
+			//(otherwise it won't work properly)
+			if(item.custom.isNoMoveItem === 1) {
+				combination.targetPos = createPos(myX, myY); // Item usage position
+			} else {
+				combination.targetUnit = unit;
+			}
+
 			combination.single = false;
 			combination.OT_EffectFlag = true;
 			combination.addScore = tmpScore; // extra score

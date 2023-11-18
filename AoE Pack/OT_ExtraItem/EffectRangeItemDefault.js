@@ -9,9 +9,27 @@
   Change log:
   2020/04/28:
   Create New
+  
+  2023/07/03:
+	Added damage order setting when death is not allowed.
+	From now on, the update history will not be included in the script header, but will be written in readme.txt.
 
 -----------------------------------------------------------------------------------------------*/
 (function() {
+//When setting OT_TargetDamageDeath or OT_UseDamageDeath
+//Set the application order of recoil damage and damage (self-destruction damage) when you are hit by your own area attack
+//
+//0:
+//Applies in the order of damage not allowed to die → damage allowed to die
+//If OT_TargetDamageDeath is false, if self-destruction damage is greater than HP, death if there is recoil damage,
+//If OT_UseDamageDeath is false, if the recoil damage is greater than or equal to HP, it will result in death if there is self-destruction damage.
+//
+//1:
+//Applies in the order of damage allowed for death → damage not allowed for death.
+//If OT_TargetDamageDeath is false, death will only occur if recoil damage exceeds HP
+//If OT_UseDamageDeath is false, death will occur only if self-destruction damage exceeds HP
+
+OT_EffectRangeItemDamageDeathCalType = 1;
 
 // Default setting when custom parameters is not set
 OT_EffectRangeItemDefault = {

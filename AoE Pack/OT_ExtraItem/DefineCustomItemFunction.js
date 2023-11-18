@@ -79,6 +79,8 @@ Function library for custom items
   2020/05/05:
   Fixed an issue where an enemy would get an error when trying to use ranged attacks of certain range types.
 
+  2023/07/03:
+  Described in Readme.txt. From now on, the update history will no longer be included in the script header.
 -----------------------------------------------------------------------------------------------*/
 // Range type
 OT_EffectRangeType = {
@@ -1226,6 +1228,11 @@ OT_EffectRangeAIScoreCalculation = {
 	getUnitFilter: function(unit, item) {
 		var unitType = unit.getUnitType();
 		
+		//Applies to all characters if the unit is in berserk state
+		if( StateControl.isBadStateOption(unit, BadStateOption.BERSERK) ) {
+			return (UnitFilterFlag.PLAYER | UnitFilterFlag.ENEMY | UnitFilterFlag.ALLY);
+		}
+
 		if( OT_getCustomItemRecovery(item) ) {
 			return FilterControl.getNormalFilter(unitType);
 		}
@@ -1311,6 +1318,16 @@ OT_EffectRangeCheckFilter = function(unit, filter) {
 //----------------------------------------------------------
 // Things that can be used in common
 //----------------------------------------------------------
+//Get the setting for whether to die due to damage to the target
+OT_getTargetDamageDeath = function(item) {
+	var value = true;
+	if( typeof item.custom.OT_TargetDamageDeath === 'boolean' ) {
+		value = item.custom.OT_TargetDamageDeath;
+	}
+
+	return value;
+};
+
 // Acquires the setting of whether to die from damage when using
 OT_getUseDamageDeath = function(item) {
 	var value = true;
@@ -1485,9 +1502,20 @@ OT_getCalculateDamageValue = function(item, targetUnit, damage, damageType, plus
 			def = SupportCalculator.getDefense(unitTotalStatus);
 		}
 	}
+
+	//If the attack target does not have death permission
+	//If the damage is more than HP, return HP-1
+	var dmg = Calculator.calculateDamageValue(targetUnit, damage, damageType, -def);
+	if( OT_getTargetDamageDeath(item) == false ) {
+		var hp = targetUnit.getHp() - dmg;
+		if (hp <= 0) {
+			dmg = targetUnit.getHp() - 1;
+		}
+	}
+
 	//root.log("Damage value: "+damage);
 	//root.log("Defense support: "+def);
-	return Calculator.calculateDamageValue(targetUnit, damage, damageType, -def);
+	return dmg;
 };
 
 // Acquire animation data when using attack items
@@ -1988,38 +2016,37 @@ OT_getCustomItemisUseDamageSign = function(item) {
 // Get damage amount after use
 OT_getCustomItemUseDamage = function(item, unit) {
 	var value = 0;
-	if( typeof item.custom.OT_UseDamage === 'number' )
-	{
+	if( typeof item.custom.OT_UseDamage === 'number' ) {
 		value = item.custom.OT_UseDamage;
-	}
-	else if(unit != null)
-	{
+	} else if(unit != null) {
 		// if specified as a string
-		if( typeof item.custom.OT_UseDamage === 'string' )
-		{
+		if( typeof item.custom.OT_UseDamage === 'string' ) {
 			var str = item.custom.OT_UseDamage;
 			var regex = /^(\-?)([0-9]+)\%$/;
 			var regexM = /^(\-?)M([0-9]+)\%$/;
-			if (str.match(regex))
-			{
+			if (str.match(regex)) {
 				var hp = unit.getHp();
 				var val = parseInt(RegExp.$2);
 				value = Math.floor( hp * (val / 100) );
 				
-				if(RegExp.$1 == '-')
-				{
+				if(RegExp.$1 == '-') {
 					value *= -1;
 				}
-			}
-			else if (str.match(regexM))
-			{
+			} else if (str.match(regexM)) {
 				var hp = ParamBonus.getMhp(unit);
 				var val = parseInt(RegExp.$2);
 				value = Math.floor( hp * (val / 100) );
 				
-				if(RegExp.$1 == '-')
-				{
+				if(RegExp.$1 == '-') {
 					value *= -1;
+				}
+			} else {
+				value = Number(str);
+				if(isNaN(value)) {
+					root.log('There is an error in the setting value of OT_UseDamage');
+					value = 0;
+				} else {
+					root.log("Correct the setting value '(number)' to (number)... OT_UseDamage");
 				}
 			}
 		}
