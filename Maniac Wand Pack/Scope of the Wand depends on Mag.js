@@ -43,10 +43,12 @@ Fixes
 　　　　　Custom parameter {RangePlus: number} that extends the range with a fixed value,
 　　　　　Added a custom parameter {ParamType: number} that can be referenced other than magical power
 　　　　　Remove MagParamMinValue from settings
+23/04/30 1.281 compatible
+23/05/25 Made it possible to call the MagDependenceControl class from outside.
 
 
 ■ Correspondence version
-　SRPG Studio Version:1.236
+　SRPG Studio Version:1.282
 
 
 ■ Terms
@@ -65,15 +67,15 @@ Fixes
 //--------------------------------------------
 // setting
 //--------------------------------------------
-var MagDependenceRangeMin = 0;	// Minimum range value (A value greater than 0. If it is 0, the minimum range display will disappear, and depending on the ability, the range may be 0.)
+var MagDependenceRangeMin = 1;	// Minimum range value (A value greater than 0. If it is 0, the minimum range display will disappear, and depending on the ability, the range may be 0.)
 
 
 
 
-//--------------------------------------------
+//-------------------------------------------
 // MagDependenceControl class
-//--------------------------------------------
-var MagDependenceControl = {
+//-------------------------------------------
+MagDependenceControl = {
 
 	// Acquire magical power dependent range
 	getItemRange: function(unit, item) {
@@ -252,6 +254,12 @@ var MagDependenceControl = {
 			}
 			rangeType = item.getTeleportationInfo().getRangeType();
 		}
+		// 1.281 compatible
+		else if( root.getScriptVersion() >= 1281 && item.getItemType() === ItemType.QUICK && obj.rangeType === SelectionRangeType.SELFONLY && item.getQuickInfo().getValue() === QuickValue.ONE) {
+			// Changed so that you can select a unit when the item effect is set to "1 unit"
+			rangeValue = 1;
+			rangeType = SelectionRangeType.MULTI;
+		}
 		else {
 			if( MagDependenceControl.isMagDependenceItem(item) != true ) {
 				rangeValue = item.getRangeValue();
@@ -352,7 +360,7 @@ BaseItemInfo.drawRange= function(x, y, rangeValue, rangeType, item) {
 
 		var DependenceRangeMin = MagDependenceControl._getItemDependenceRangeMinValue(this._item);
 		if( DependenceRangeMin > 0 ) {
-			text = text+'(lowest'+DependenceRangeMin+')';
+			text = text+'(Min'+DependenceRangeMin+')';
 		}
 		
 		ItemInfoRenderer.drawKeyword(x, y, root.queryCommand('range_capacity'));
@@ -423,6 +431,14 @@ QuickItemInfo.drawItemInfoCycle= function(x, y) {
 		
 		y += ItemInfoRenderer.getSpaceY();
 		this.drawRange(x, y, this._item.getRangeValue(), this._item.getRangeType(), this._item);
+		
+		//1.281 compatible
+		if( root.getScriptVersion() >= 1281 ){ 
+			if (this._isSurroundings) {
+				y += ItemInfoRenderer.getSpaceY();
+				ItemInfoRenderer.drawKeyword(x, y, StringTable.QuickInfo_Surroundings);
+			}
+		}
 }
 
 
@@ -516,7 +532,7 @@ TeleportationItemSelection.setPosSelection= function() {
 		this._posSelector.setPosOnly(this._unit, this._item, indexArray, PosMenuType.Item);
 		
 		// Don't call setFirstPos so that the cursor doesn't jump too far
-        // this._posSelector.setFirstPos();
+		// this._posSelector.setFirstPos();
 }
 
 
@@ -568,7 +584,7 @@ TeleportationItemInfo._drawValue= function(x, y) {
 
 		var DependenceRangeMin = MagDependenceControl._getItemDependenceRangeMinValue(this._item);
 		if( MagDependenceRangeMin > 0 ) {
-			text = text+'(最低'+MagDependenceRangeMin+')';
+			text = text+'(Min'+MagDependenceRangeMin+')';
 		}
 		
 		ItemInfoRenderer.drawKeyword(x, y, StringTable.Teleportation_Range);
@@ -751,6 +767,12 @@ CombinationCollector.Item._setUnitCombination= function(misc) {
 				rangeValue = MagDependenceControl.getTeleportRange(unit, item);
 			}
 			rangeType = item.getTeleportationInfo().getRangeType();
+		}
+		//1.281 compatible
+		else if( root.getScriptVersion() >= 1281 && item.getItemType() === ItemType.QUICK && obj.rangeType === SelectionRangeType.SELFONLY) {
+			//In the action recovery AI, even if it is set alone, it is treated as range 1.
+			rangeValue = 1;
+			rangeType = SelectionRangeType.MULTI;
 		}
 		else {
 			if( MagDependenceControl.isMagDependenceItem(item) != true ) {
